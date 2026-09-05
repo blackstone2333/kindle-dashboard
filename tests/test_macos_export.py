@@ -8,14 +8,14 @@ from connectors.macos import export_snapshot
 
 
 class MacOSExportTests(unittest.TestCase):
-    def test_range_covers_previous_month_through_month_after_next(self):
+    def test_range_covers_two_months_each_side(self):
         self.assertEqual(
             export_snapshot.export_range(date(2026, 9, 5)),
-            (date(2026, 8, 1), date(2026, 11, 1)),
+            (date(2026, 7, 1), date(2026, 12, 1)),
         )
 
     def test_snapshot_keeps_successful_source_when_other_source_fails(self):
-        start, end = date(2026, 8, 1), date(2026, 11, 1)
+        start, end = date(2026, 7, 1), date(2026, 12, 1)
         raw = {
             "calendar": {"ok": False, "error": "not authorized", "items": []},
             "reminders": {"ok": True, "items": [{"id": "r1", "title": "private", "due": None}]},

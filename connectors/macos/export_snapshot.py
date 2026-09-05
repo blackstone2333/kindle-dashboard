@@ -26,12 +26,12 @@ TIMEZONE = "Asia/Shanghai"
 
 
 def export_range(today: date = None) -> Tuple[date, date]:
-    """Return [first day of previous month, first day of month after next)."""
+    """Return [first day of two months ago, first day of three months ahead)."""
     if today is None:
         today = date.today()
     month_zero = today.year * 12 + today.month - 1
-    start_zero = month_zero - 1
-    end_zero = month_zero + 2
+    start_zero = month_zero - 2
+    end_zero = month_zero + 3
     return (
         date(start_zero // 12, start_zero % 12 + 1, 1),
         date(end_zero // 12, end_zero % 12 + 1, 1),

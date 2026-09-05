@@ -38,12 +38,14 @@ def _epoch() -> int:
 
 
 def _date_range(today: Optional[dt.date] = None) -> tuple[dt.date, dt.date]:
-    """First of previous month through first of the month after next."""
+    """First of two months ago through first of three months ahead."""
     today = today or dt.datetime.now(SHANGHAI).date()
     this_month = today.replace(day=1)
     end = (this_month.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     end = (end.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    end = (end.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     previous = (this_month - dt.timedelta(days=1)).replace(day=1)
+    previous = (previous - dt.timedelta(days=1)).replace(day=1)
     return previous, end
 
 

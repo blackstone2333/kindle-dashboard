@@ -104,13 +104,14 @@ class HubTests(unittest.TestCase):
         self.assertEqual(snapshot["utc_offset"], 28800)
         self.assertIn(today, snapshot["days"])
         self.assertEqual(snapshot["days"][today]["almanac"].keys(), {"yi", "ji"})
-        self.assertIn("2026-08-01", snapshot["days"])
-        self.assertNotIn("2026-11-01", snapshot["days"])
+        self.assertIn("2026-07-01", snapshot["days"])
+        self.assertIn("2026-11-30", snapshot["days"])
+        self.assertNotIn("2026-12-01", snapshot["days"])
 
     def test_month_range_crosses_year_boundary_in_shanghai_calendar(self):
         start, end = _date_range(dt.date(2026, 1, 1))
-        self.assertEqual(start.isoformat(), "2025-12-01")
-        self.assertEqual(end.isoformat(), "2026-03-01")
+        self.assertEqual(start.isoformat(), "2025-11-01")
+        self.assertEqual(end.isoformat(), "2026-04-01")
 
     def test_missing_exporter_and_weather_failure_do_not_destroy_cache(self):
         self.hub._merge_export(export_document(events=[{"id": "e"}], tasks=[{"id": "t"}]))
