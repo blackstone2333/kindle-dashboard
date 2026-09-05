@@ -3,7 +3,7 @@ local Updates = {}
 Updates.order = {"clock", "date", "weather", "timeline", "countdown", "calendar", "almanac", "future", "footer"}
 Updates.regions = {
     clock={40,20,390,130}, date={50,155,390,90}, weather={440,40,300,205},
-    timeline={50,310,690,635}, countdown={50,930,690,78}, calendar={792,36,612,465},
+    timeline={50,310,690,620}, countdown={50,930,690,78}, calendar={792,36,612,465},
     almanac={792,512,615,79}, future={792,608,615,397}, footer={1276,1018,110,36},
 }
 

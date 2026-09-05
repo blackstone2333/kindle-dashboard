@@ -11,6 +11,7 @@ for i=1,12 do data.future[i]={title="日程"..i,time="09:00",date="09月07日 �
 local snap={generated_at=10,sources={calendar={ok=true,updated_at=10}},
     weather={temperature=20.1,low=15,high=25,uv=2,updated_at=10}}
 local footer={wifi=true,battery_icon="battery-full"}
+assert(U.regions.timeline[2] + U.regions.timeline[4] <= U.regions.countdown[2], "timeline and countdown regions must not overlap")
 local baseline=U.capture(data,snap,0,0,footer)
 local function check(name,d,s,p,f,expected)
     local actual=table.concat(U.changed(baseline,U.capture(d,s,0,p,f)),",")
