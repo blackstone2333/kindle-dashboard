@@ -11,7 +11,8 @@ local logger = require("logger")
 local Screen = Device.screen
 local View = InputContainer:extend{ name = "KindleAgentDashboardView", covers_fullscreen = true }
 local LEFT_CARD_COUNT = 4 -- today, countdown, weather, Agent
-local RIGHT_CARD_COUNT = 4 -- month, week, year, Agent
+local RIGHT_CARD_COUNT = 2 -- month, week
+local RIGHT_LOWER_CARD_COUNT = 2 -- schedule, horoscope
 
 local function str(value, fallback)
     if type(value) == "string" or type(value) == "number" then return tostring(value) end
@@ -58,7 +59,7 @@ function View:init()
         schema_version = 1, generated_at = 0, utc_offset = 28800, events = {}, tasks = {}, days = {}, sources = {},
     }
     self.page, self.future_page, self.render_count = 0, 0, 0
-    self.left_card, self.right_card, self.card_page = 1, 1, 0
+    self.left_card, self.right_card, self.right_lower_card, self.card_page = 1, 1, 1, 0
     self.countdown_path = self.root .. "/countdown.json"
     self.countdown_config = self.cache.read(self.countdown_path) or {version=1,primary_id="primary",targets={}}
     self.month_offset, self.refresh_batches, self.full_refreshes = 0, 0, 1
@@ -71,7 +72,7 @@ function View:init()
     self.font_name = self.font_name or "NotoSansCJKsc-Regular.otf"
     self:rebuild()
     self:readFooter()
-    self.visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page)
+    self.visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page,self.right_lower_card)
     self:registerTouchZones({
         { id = "dashboard_tap", ges = "tap", screen_zone = {ratio_x=0,ratio_y=0,ratio_w=1,ratio_h=1},
           handler = function(ges) return self:tap(ges) end },
@@ -107,7 +108,7 @@ function View:readFooter()
 end
 
 function View:requestUpdates()
-    local visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page)
+    local visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page,self.right_lower_card)
     local changed = self.updates.changed(self.visual,visual)
     self.visual = visual
     if #changed > 0 then
@@ -270,6 +271,25 @@ function View:paintRightDayCard(bb)
     end
 end
 
+function View:paintHoroscopeCard(bb)
+    local card
+    for _, item in ipairs(self.data.cards or {}) do
+        if item.type == "horoscope" then card = item; break end
+    end
+    self:rect(bb, 792, 590, 612, 420, 255)
+    self:line(bb, 800, 612, 1400, 170, 2)
+    self:text(bb, "星座运势", 800, 630, 34, 17, 240)
+    if not card then
+        self:text(bb, "等待 Agent 推送今日星座运势", 800, 730, 27, 102, 570)
+        return
+    end
+    self:text(bb, card.title, 800, 695, 31, 17, 570)
+    local lines = self:cardBodyLines(card.body, 4)
+    for index, line in ipairs(lines) do
+        self:text(bb, line, 800, 750 + (index - 1) * 42, 24, 51, 570)
+    end
+end
+
 function View:paintWeatherCard(bb)
     local weather = type(self.snapshot.weather) == "table" and self.snapshot.weather or {}
     self:rect(bb, 50, 305, 690, 700, 255)
@@ -298,18 +318,18 @@ end
 
 function View:paintWeekCard(bb)
     local d = self.data
-    self:rect(bb, 792, 36, 612, 970, 255)
+    self:rect(bb, 792, 36, 612, 465, 255)
     self:icon(bb, "settings", 1328, 48, 38)
     self:line(bb, 800, 90, 1400, 170, 2)
-    self:text(bb, "未来 7 天", 800, 112, 42, 17, 300)
+    self:text(bb, "周历 · 未来 7 天", 800, 112, 36, 17, 390)
     local display = d.future or {}
     if #display == 0 then
         self:text(bb, "暂无后续安排", 800, 240, 28, 102, 560)
         return
     end
-    for index = 1, math.min(10, #display) do
+    for index = 1, math.min(4, #display) do
         local item = display[index]
-        local y = 190 + (index - 1) * 72
+        local y = 164 + (index - 1) * 70
         self:text(bb, item.date, 800, y, 20, 68, 120)
         self:text(bb, item.time, 930, y, 22, 51, 75)
         self:text(bb, item.title, 1015, y - 2, 27, 17, 320)
@@ -463,11 +483,11 @@ function View:paintDashboard(bb)
     end
     self:line(bb, 64, 1014, 1384, 68, 2)
     self:icon(bb, "sun", 72, 1021, 30)
-    self:icon(bb, self.footer.wifi and "wifi" or "wifi-off", 1288, 1021, 30, not self.footer.wifi)
+    self:icon(bb, self.footer.wifi and "wifi" or "wifi-off", 1262, 1021, 30, not self.footer.wifi)
     if type(self.footer.battery) == "number" and self.footer.battery >= 0 then
-        self:text(bb, tostring(math.floor(self.footer.battery + 0.5)) .. "%", 1340, 1024, 20, 51, 62, "right")
+        self:text(bb, tostring(math.floor(self.footer.battery + 0.5)) .. "%", 1402, 1024, 20, 51, 62, "right")
     end
-    self:icon(bb, self.footer.battery_icon, 1344, 1021, 30)
+    self:icon(bb, self.footer.battery_icon, 1310, 1021, 30)
     -- The fixed top area remains untouched.  Card slots overlay only their
     -- lower regions so switching pages can stay a local refresh on e-ink.
     if self.left_card == 2 then
@@ -479,10 +499,9 @@ function View:paintDashboard(bb)
     end
     if self.right_card == 2 then
         self:paintWeekCard(bb)
-    elseif self.right_card == 3 then
-        self:paintYearCard(bb)
-    elseif self.right_card == 4 then
-        self:paintAgentCard(bb, 792, 36, 612, 970)
+    end
+    if self.right_lower_card == 2 then
+        self:paintHoroscopeCard(bb)
     end
     self.render_count = self.render_count + 1
     self:writeStatus()
@@ -594,8 +613,9 @@ function View:tap(ges)
     if x >= 1295 and y < 114 then self:settings(); return true end
     if x >= 430 and x < 755 and y < 270 then self:weatherDetails(); return true end
     if x >= 800 and y < 114 then self:setMonth(0); return true end
+    if x >= 1240 and y > 995 then self:connectionDetails(); return true end
     if x < 150 and y > 995 then self:brightness(); return true end
-    if x >= 800 and y >= 600 and y < 670 then
+    if self.right_lower_card == 1 and x >= 800 and y >= 600 and y < 670 then
         self:setSelectedDate(nil)
         return true
     end
@@ -618,7 +638,7 @@ function View:tap(ges)
         })
         return true
     end
-    if x >= 800 and y >= 670 and y < 1008 then
+    if self.right_lower_card == 1 and x >= 800 and y >= 670 and y < 1008 then
         local display = self:displayItems()
         local item = display[self.future_page*5 + math.floor((y-670)/67) + 1]
         if item then self:scheduleActions(item) end
@@ -662,31 +682,36 @@ function View:swipe(ges)
     local delta=({north=1,west=1,south=-1,east=-1})[ges.direction]
     if not delta then return true end
     local x,y=ges.pos.x/self.scale,ges.pos.y/self.scale
-    if x>=760 and y>=120 and (ges.direction == "west" or ges.direction == "east") then
+    if x>=760 and y>=120 and y<505 and (ges.direction == "west" or ges.direction == "east") then
         self.right_card = (self.right_card + delta - 1) % RIGHT_CARD_COUNT + 1
         self.card_page = 0
         self.future_page = 0
         self:requestUpdates()
         return true
     elseif x>=760 and y>=145 and y<505 then
-        if self.right_card == 1 then self:setMonth(self.month_offset+delta) end
+        if self.right_card == 1 then
+            self:setMonth(self.month_offset+delta)
+        else
+            self.future_page = (self.future_page + delta) % math.max(1, math.ceil(#self.data.future/4))
+            self:requestUpdates()
+        end
         return true
     elseif x<760 and y>=310 and y<1014 then
         if ges.direction == "west" or ges.direction == "east" then
             self.left_card = (self.left_card + delta - 1) % LEFT_CARD_COUNT + 1
             self.card_page = 0
             self.page = 0
-        elseif self.left_card == 3 then
+        elseif self.left_card == 4 then
             self.card_page = (self.card_page + delta) % math.max(1, #self.data.cards)
         else
             self.page = (self.page + delta) % math.max(1, math.ceil(#self.data.timeline/6))
         end
     elseif x>=760 and y>=608 and y<1014 then
         if ges.direction == "west" or ges.direction == "east" then
-            self.right_card = (self.right_card + delta - 1) % 3 + 1
+            self.right_lower_card = (self.right_lower_card + delta - 1) % RIGHT_LOWER_CARD_COUNT + 1
             self.card_page = 0
             self.future_page = 0
-        elseif self.right_card == 3 then
+        elseif self.right_lower_card == 2 then
             self.card_page = (self.card_page + delta) % math.max(1, #self.data.cards)
         else
             local display_count = self.selected_date and #self.data.selected or #self.data.future
@@ -700,6 +725,29 @@ end
 function View:brightness()
     local ok, widget = pcall(function() return require("ui/widget/frontlightwidget"):new{} end)
     if ok then UIManager:show(widget) else logger.warn("KindleAgentDashboard: frontlight unavailable") end
+end
+
+function View:connectionDetails()
+    local connected = false
+    local ok, value = pcall(NetworkMgr.isConnected, NetworkMgr)
+    if ok then connected = value == true end
+    local calendar = ((self.snapshot.sources or {}).calendar or {}).ok == true
+    local weather = ((self.snapshot.sources or {}).weather or {}).ok == true
+    local lines = {
+        "网络与 Hub 状态",
+        "Wi-Fi：" .. (connected and "已连接" or "未连接"),
+        "Hub 日程：" .. (calendar and "已同步" or "未同步"),
+        "天气服务：" .. (weather and "已同步" or "未同步"),
+        self.client.error and ("同步错误：" .. self.client.error) or "同步客户端正常",
+    }
+    UIManager:show(require("ui/widget/infomessage"):new{text=table.concat(lines, "\n")})
+end
+
+function View:restartDashboard()
+    self:onClose()
+    UIManager:scheduleIn(2, function()
+        if self.owner and not self.owner.view then self.owner:open() end
+    end)
 end
 
 function View:settings()
@@ -721,8 +769,9 @@ function View:settings()
         title = "Kindle Agent 看板", buttons = {
             {{text="立即同步", callback=function() close(); self.last_request=0; self:tick(true) end}, {text="同步状态", callback=status}},
             {{text="亮度调节", callback=function() close(); self:brightness() end}, {text=self.keep_awake and "关闭常显" or "开启常显", callback=function() self:setAwake(not self.keep_awake); close() end}},
-            {{text="清除残影", callback=function() close(); self:fullRefresh("manual") end}, {text="回到当月", callback=function() close(); self:setMonth(0) end}},
-            {{text="返回看板", callback=close}, {text="退出看板", callback=function() close(); self:onClose() end}},
+            {{text="清除残影", callback=function() close(); self:fullRefresh("manual") end}, {text="重启看板", callback=function() close(); self:restartDashboard() end}},
+            {{text="回到当月", callback=function() close(); self:setMonth(0) end}, {text="返回看板", callback=close}},
+            {{text="退出看板", callback=function() close(); self:onClose() end}, {text="网络状态", callback=function() close(); self:connectionDetails() end}},
         },
     }
     UIManager:show(dialog)
@@ -760,7 +809,7 @@ function View:onResume()
     self.last_request = 0
     self:rebuild()
     self:readFooter()
-    self.visual=self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page)
+    self.visual=self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page,self.right_lower_card)
     self:fullRefresh("resume")
 end
 
