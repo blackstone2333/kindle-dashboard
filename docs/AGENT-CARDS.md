@@ -20,3 +20,11 @@ curl -X PUT "http://127.0.0.1:18501/api/v1/cards/divination-2026-09-05" \
 - 可附加 `symbol`、`source_url`、`priority` 等展示元数据，但不得放入可执行内容。
 
 每日卜卦/一签建议由 Agent 每天早上生成一个带日期的稳定 ID，例如 `divination-2026-09-05`，重复提交会覆盖同一张卡片。`expires_at` 到期后 Hub 会自动从设备快照中移除。删除使用同一路径的 `DELETE` 请求。
+
+也可以直接调用项目内的辅助命令：
+
+```sh
+python3 tools/publish_card.py divination-2026-09-05 \
+  --type divination --title '今日一签' --body '宜静心读书，娱乐内容。' \
+  --expires-at 1788652800
+```
