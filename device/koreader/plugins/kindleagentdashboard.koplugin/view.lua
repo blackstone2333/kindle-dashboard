@@ -43,12 +43,8 @@ local function countdown_days(item)
     return tostring(item.days) .. " 天"
 end
 
-local function countdown_secondary(items)
-    local labels = {}
-    for _, item in ipairs(items or {}) do
-        labels[#labels + 1] = item.title .. " " .. countdown_days(item)
-    end
-    return table.concat(labels, "   ·   ")
+local function countdown_secondary_label(item)
+    return str(item and item.title, "目标日") .. " " .. countdown_days(item)
 end
 
 function View:init()
@@ -239,8 +235,11 @@ function View:paintDashboard(bb)
         self:text(bb, primary.title, 185, 937, 25, 17, 260)
         self:text(bb, countdown_days(primary), 728, 932, 43, 0, 250, "right")
         self:text(bb, "目标 " .. primary.date, 56, 976, 19, 102, 250)
-        if #countdown.secondary > 0 then
-            self:text(bb, countdown_secondary(countdown.secondary), 315, 978, 18, 102, 413, "right")
+        for index, item in ipairs(countdown.secondary or {}) do
+            -- Keep each auxiliary target on its own row.  The previous
+            -- single-line string shared the primary number/date area and
+            -- was clipped or visually layered on top of the main target.
+            self:text(bb, countdown_secondary_label(item), 728, 978 + (index - 1) * 18, 15, 102, 400, "right")
         end
     else
         self:text(bb, "倒计时", 56, 943, 21, 102, 120)
