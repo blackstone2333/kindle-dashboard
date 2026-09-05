@@ -116,7 +116,7 @@ def _weather_condition(code: Optional[int]) -> Optional[str]:
 def _empty_weather(location: str) -> Dict[str, Any]:
     return {"location": location, "condition": None, "icon": "cloud", "temperature": None,
             "low": None, "high": None, "rain_probability": None, "uv": None,
-            "wind_level": None, "updated_at": None, "ok": False}
+            "wind_level": None, "forecast": [], "updated_at": None, "ok": False}
 
 
 class SnapshotHub:
@@ -339,11 +339,25 @@ class SnapshotHub:
             current, daily = doc.get("current", {}), doc.get("daily", {})
             code = current.get("weather_code")
             wind = (daily.get("wind_speed_10m_max") or [None])[0]
+            forecast = []
+            for index, day in enumerate(daily.get("time", [])[:7]):
+                day_code = (daily.get("weather_code") or [None] * 7)[index]
+                day_wind = (daily.get("wind_speed_10m_max") or [None] * 7)[index]
+                forecast.append({
+                    "date": day,
+                    "condition": _weather_condition(day_code),
+                    "icon": _weather_icon(day_code),
+                    "low": (daily.get("temperature_2m_min") or [None] * 7)[index],
+                    "high": (daily.get("temperature_2m_max") or [None] * 7)[index],
+                    "rain_probability": (daily.get("precipitation_probability_max") or [None] * 7)[index],
+                    "uv": (daily.get("uv_index_max") or [None] * 7)[index],
+                    "wind_speed_kmh": day_wind,
+                })
             weather = {"location": self.city, "condition": _weather_condition(code),
                 "icon": _weather_icon(code), "temperature": current.get("temperature_2m"),
                 "low": (daily.get("temperature_2m_min") or [None])[0], "high": (daily.get("temperature_2m_max") or [None])[0],
                 "rain_probability": (daily.get("precipitation_probability_max") or [None])[0], "uv": (daily.get("uv_index_max") or [None])[0],
-                "wind_speed_kmh": wind, "updated_at": _epoch(), "ok": True}
+                "wind_speed_kmh": wind, "forecast": forecast, "updated_at": _epoch(), "ok": True}
         except Exception:
             with self.lock:
                 self.state["weather"]["ok"] = False

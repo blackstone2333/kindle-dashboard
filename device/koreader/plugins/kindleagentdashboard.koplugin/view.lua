@@ -10,6 +10,8 @@ local NetworkMgr = require("ui/network/manager")
 local logger = require("logger")
 local Screen = Device.screen
 local View = InputContainer:extend{ name = "KindleAgentDashboardView", covers_fullscreen = true }
+local LEFT_CARD_COUNT = 4 -- today, countdown, weather, Agent
+local RIGHT_CARD_COUNT = 4 -- month, week, year, Agent
 
 local function str(value, fallback)
     if type(value) == "string" or type(value) == "number" then return tostring(value) end
@@ -213,8 +215,10 @@ function View:paintCountdownCard(bb)
         local secondary = countdown.secondary or {}
         if #secondary == 0 then self:text(bb, "暂无其他倒计时目标", 56, 675, 24, 102, 500) end
         for index, item in ipairs(secondary) do
-            if index <= 5 then
-                self:text(bb, countdown_secondary_label(item), 56, 675 + (index - 1) * 48, 24, 51, 650)
+            if index <= 4 then
+                local y = 675 + (index - 1) * 72
+                self:text(bb, countdown_days(item), 56, y, 29, 0, 120)
+                self:text(bb, item.title, 195, y + 2, 25, 51, 500)
             end
         end
     else
@@ -264,6 +268,103 @@ function View:paintRightDayCard(bb)
         self:text(bb, item.kind, 1400, y + 29, 18, 102, 120, "right")
         self:line(bb, 800, y + 47, 1400, 170)
     end
+end
+
+function View:paintWeatherCard(bb)
+    local weather = type(self.snapshot.weather) == "table" and self.snapshot.weather or {}
+    self:rect(bb, 50, 305, 690, 700, 255)
+    self:line(bb, 56, 326, 728, 170, 2)
+    self:text(bb, "未来天气", 56, 345, 34, 17, 250)
+    self:text(bb, str(weather.location, "天气"), 728, 357, 22, 102, 250, "right")
+    self:icon(bb, str(weather.icon, "cloud"), 56, 410, 76)
+    self:text(bb, number(weather.temperature, "°"), 150, 405, 58, 17, 180)
+    self:text(bb, str(weather.condition, "暂无天气"), 150, 475, 25, 85, 210)
+    local forecast = type(weather.forecast) == "table" and weather.forecast or {}
+    if #forecast == 0 then
+        self:text(bb, "暂无未来天气数据", 56, 570, 26, 102, 600)
+        return
+    end
+    self:line(bb, 56, 535, 728, 170)
+    for index = 1, math.min(5, #forecast) do
+        local item = forecast[index]
+        local y = 565 + (index - 1) * 72
+        self:text(bb, str(item.date, "--"), 56, y, 21, 68, 120)
+        self:icon(bb, str(item.icon, "cloud"), 190, y - 6, 31)
+        self:text(bb, str(item.condition, "--"), 230, y + 2, 21, 51, 120)
+        self:text(bb, number(item.low, "°") .. " / " .. number(item.high, "°"), 485, y + 2, 23, 17, 150, "right")
+        self:text(bb, "雨" .. number(item.rain_probability, "%"), 728, y + 2, 20, 102, 100, "right")
+    end
+end
+
+function View:paintWeekCard(bb)
+    local d = self.data
+    self:rect(bb, 792, 36, 612, 970, 255)
+    self:icon(bb, "settings", 1328, 48, 38)
+    self:line(bb, 800, 90, 1400, 170, 2)
+    self:text(bb, "未来 7 天", 800, 112, 42, 17, 300)
+    local display = d.future or {}
+    if #display == 0 then
+        self:text(bb, "暂无后续安排", 800, 240, 28, 102, 560)
+        return
+    end
+    for index = 1, math.min(10, #display) do
+        local item = display[index]
+        local y = 190 + (index - 1) * 72
+        self:text(bb, item.date, 800, y, 20, 68, 120)
+        self:text(bb, item.time, 930, y, 22, 51, 75)
+        self:text(bb, item.title, 1015, y - 2, 27, 17, 320)
+        self:text(bb, item.kind, 1400, y + 31, 19, 102, 100, "right")
+        self:line(bb, 800, y + 58, 1400, 170)
+    end
+end
+
+function View:paintYearCard(bb)
+    local d = self.data
+    self:rect(bb, 792, 36, 612, 970, 255)
+    self:icon(bb, "settings", 1328, 48, 38)
+    self:text(bb, tostring(d.year) .. " 年", 800, 52, 42, 17, 280)
+    self:text(bb, "年历概览 · 点月历返回月视图", 800, 112, 22, 102, 480)
+    local month_names = {"一月","二月","三月","四月","五月","六月","七月","八月","九月","十月","十一月","十二月"}
+    local counts = {}
+    for index = 1, 12 do counts[index] = 0 end
+    local offset = tonumber(self.snapshot.utc_offset) or 28800
+    for _, event in ipairs(self.snapshot.events or {}) do
+        if type(event.start) == "number" then
+            local stamp = os.date("!*t", event.start + offset)
+            if stamp.year == d.year then counts[stamp.month] = counts[stamp.month] + 1 end
+        end
+    end
+    for _, task in ipairs(self.snapshot.tasks or {}) do
+        local date = type(task.due_date) == "string" and task.due_date or nil
+        local month = date and tonumber(date:match("^%d+%-(%d%d)")) or nil
+        local year = date and tonumber(date:match("^(%d%d%d%d)")) or nil
+        if year == d.year and month and counts[month] then counts[month] = counts[month] + 1 end
+    end
+    for index = 1, 12 do
+        local column = (index - 1) % 3
+        local row = math.floor((index - 1) / 3)
+        local x = 800 + column * 198
+        local y = 175 + row * 180
+        self:rect(bb, x, y, 174, 145, 245)
+        self:text(bb, month_names[index], x + 10, y + 12, 24, 17, 150)
+        self:text(bb, index == d.month and "当前月" or "", x + 10, y + 54, 21, index == d.month and 0 or 102, 140)
+        self:text(bb, "安排：" .. tostring(counts[index]) .. " 项", x + 10, y + 92, 18, 102, 150)
+    end
+end
+
+function View:weatherDetails()
+    local weather = type(self.snapshot.weather) == "table" and self.snapshot.weather or {}
+    local lines = {str(weather.location, "天气"),
+        str(weather.condition, "暂无天气") .. "  " .. number(weather.temperature, "°"),
+        "高低温：" .. number(weather.low, "°") .. " / " .. number(weather.high, "°"),
+        "降雨概率：" .. number(weather.rain_probability, "%") .. " · UV：" .. number(weather.uv),
+        "风力：" .. number(weather.wind_level, "级")}
+    local forecast = weather.forecast or {}
+    for index = 1, math.min(7, #forecast) do
+        local item = forecast[index]
+        lines[#lines + 1] = str(item.date, "--") .. "  " .. str(item.condition, "--") .. "  " .. number(item.low, "°") .. " / " .. number(item.high, "°")
+    end
+    UIManager:show(require("ui/widget/infomessage"):new{text=table.concat(lines, "\n")})
 end
 
 function View:paintTo(bb)
@@ -321,12 +422,6 @@ function View:paintDashboard(bb)
         self:text(bb, primary.title, 185, 937, 25, 17, 260)
         self:text(bb, countdown_days(primary), 728, 932, 43, 0, 250, "right")
         self:text(bb, "目标 " .. primary.date, 56, 976, 19, 102, 250)
-        for index, item in ipairs(countdown.secondary or {}) do
-            -- Keep each auxiliary target on its own row.  The previous
-            -- single-line string shared the primary number/date area and
-            -- was clipped or visually layered on top of the main target.
-            self:text(bb, countdown_secondary_label(item), 728, 978 + (index - 1) * 18, 15, 102, 400, "right")
-        end
     else
         self:text(bb, "倒计时", 56, 943, 21, 102, 120)
         self:text(bb, "点击右侧月历日期即可设置目标日", 185, 941, 22, 102, 543)
@@ -369,18 +464,25 @@ function View:paintDashboard(bb)
     self:line(bb, 64, 1014, 1384, 68, 2)
     self:icon(bb, "sun", 72, 1021, 30)
     self:icon(bb, self.footer.wifi and "wifi" or "wifi-off", 1288, 1021, 30, not self.footer.wifi)
+    if type(self.footer.battery) == "number" and self.footer.battery >= 0 then
+        self:text(bb, tostring(math.floor(self.footer.battery + 0.5)) .. "%", 1340, 1024, 20, 51, 62, "right")
+    end
     self:icon(bb, self.footer.battery_icon, 1344, 1021, 30)
     -- The fixed top area remains untouched.  Card slots overlay only their
     -- lower regions so switching pages can stay a local refresh on e-ink.
     if self.left_card == 2 then
         self:paintCountdownCard(bb)
     elseif self.left_card == 3 then
+        self:paintWeatherCard(bb)
+    elseif self.left_card == 4 then
         self:paintAgentCard(bb, 50, 305, 690, 700)
     end
     if self.right_card == 2 then
-        self:paintRightDayCard(bb)
+        self:paintWeekCard(bb)
     elseif self.right_card == 3 then
-        self:paintAgentCard(bb, 792, 590, 612, 420)
+        self:paintYearCard(bb)
+    elseif self.right_card == 4 then
+        self:paintAgentCard(bb, 792, 36, 612, 970)
     end
     self.render_count = self.render_count + 1
     self:writeStatus()
@@ -490,13 +592,14 @@ end
 function View:tap(ges)
     local x, y = ges.pos.x / self.scale, ges.pos.y / self.scale
     if x >= 1295 and y < 114 then self:settings(); return true end
+    if x >= 430 and x < 755 and y < 270 then self:weatherDetails(); return true end
     if x >= 800 and y < 114 then self:setMonth(0); return true end
     if x < 150 and y > 995 then self:brightness(); return true end
     if x >= 800 and y >= 600 and y < 670 then
         self:setSelectedDate(nil)
         return true
     end
-    if x >= 800 and y >= 145 and y < 505 then
+    if self.right_card == 1 and x >= 800 and y >= 145 and y < 505 then
         local column = math.floor((x - 800) / 85)
         local row = math.floor((y - 157) / 56)
         if column >= 0 and column < 7 and row >= 0 and row < 6 then
@@ -559,12 +662,18 @@ function View:swipe(ges)
     local delta=({north=1,west=1,south=-1,east=-1})[ges.direction]
     if not delta then return true end
     local x,y=ges.pos.x/self.scale,ges.pos.y/self.scale
-    if x>=760 and y>=145 and y<505 then
-        self:setMonth(self.month_offset+delta)
+    if x>=760 and y>=120 and (ges.direction == "west" or ges.direction == "east") then
+        self.right_card = (self.right_card + delta - 1) % RIGHT_CARD_COUNT + 1
+        self.card_page = 0
+        self.future_page = 0
+        self:requestUpdates()
+        return true
+    elseif x>=760 and y>=145 and y<505 then
+        if self.right_card == 1 then self:setMonth(self.month_offset+delta) end
         return true
     elseif x<760 and y>=310 and y<1014 then
         if ges.direction == "west" or ges.direction == "east" then
-            self.left_card = (self.left_card + delta - 1) % 3 + 1
+            self.left_card = (self.left_card + delta - 1) % LEFT_CARD_COUNT + 1
             self.card_page = 0
             self.page = 0
         elseif self.left_card == 3 then
