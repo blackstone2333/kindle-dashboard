@@ -1,0 +1,14 @@
+services:
+  kindle-agent-demo:
+    build: .
+    container_name: kindle-agent-demo
+    restart: "no"
+    ports:
+      - "127.0.0.1:18500:8000"
+    volumes:
+      - ./fixtures:/app/fixtures:ro
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

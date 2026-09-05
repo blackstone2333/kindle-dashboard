@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kindle Agent Dashboard payload",
+  "type": "object",
+  "additionalProperties": true,
+  "description": "Fixture/API payload. Dates use ISO 8601 in the configured local timezone (Asia/Shanghai); times use HH:MM local time. Temperatures are degrees Celsius, percentages are 0-100, wind speed is a Beaufort-style level. Empty collections degrade to a visible placeholder; long text wraps then ellipsizes.",
+  "properties": {
+    "date": {"type": "string", "format": "date"},
+    "weekday": {"type": "string"},
+    "lunar": {"type": "string"},
+    "solar_term": {"type": "string"},
+    "almanac": {"type": "object", "additionalProperties": {"type": "string"}},
+    "weather": {"type": "object", "properties": {"location": {"type": "string"}, "condition": {"type": "string"}, "temperature": {"type": "string"}, "high_low": {"type": "string"}}, "additionalProperties": true},
+    "events": {"type": "array", "items": {"$ref": "#/$defs/timed_item"}},
+    "tasks": {"type": "array", "items": {"$ref": "#/$defs/timed_item"}},
+    "future_events": {"type": "array", "items": {"$ref": "#/$defs/future_item"}},
+    "news": {"type": "array", "items": {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}}, "additionalProperties": true}},
+    "photo_caption": {"type": "string"},
+    "sync_status": {"type": "string"},
+    "agent_cards": {"type": "array", "items": {"type": "object", "additionalProperties": true}}
+  },
+  "$defs": {
+    "timed_item": {"type": "object", "required": ["time", "title"], "properties": {"time": {"type": "string"}, "title": {"type": "string"}, "detail": {"type": "string"}}, "additionalProperties": true},
+    "future_item": {"type": "object", "required": ["date", "title"], "properties": {"date": {"type": "string"}, "weekday": {"type": "string"}, "time": {"type": "string"}, "title": {"type": "string"}, "kind": {"type": "string"}}, "additionalProperties": true}
+  }
+}

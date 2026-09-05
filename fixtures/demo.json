@@ -1,0 +1,38 @@
+{
+  "date": "2026-08-29",
+  "weekday": "星期六",
+  "lunar": "农历七月十七 · 丙午马年 · 处暑",
+  "lunar_note": "示意",
+  "solar_term": "处暑",
+  "next_solar_term": "白露",
+  "almanac": {"宜": "阅读 · 整理", "忌": "久坐 · 熬夜"},
+  "next_item": {
+    "time": "09:30",
+    "title": "家庭周末计划会",
+    "detail": "书房 · 线上"
+  },
+  "events": [
+    {"time": "09:30", "title": "家庭周末计划会", "detail": "书房 · 线上"},
+    {"time": "14:00", "title": "整理番茄小说更新", "detail": "个人 · 阅读"},
+    {"time": "19:30", "title": "晚间散步与照片整理", "detail": "附近公园"}
+  ],
+  "tasks": [
+    {"time": "10:45", "title": "确认 Kindle 看板的今日内容", "detail": "今天"},
+    {"time": "16:00", "title": "把长标题换行后再检查显示边界", "detail": "今天"},
+    {"time": "20:30", "title": "这是一条很长的待办示例，用来验证在 PW3 窄屏上会安全换行并在达到行数上限后截断", "detail": "本周"}
+  ],
+  "future_events": [
+    {"date": "08月29日", "weekday": "六", "time": "09:30", "title": "家庭周末计划会", "kind": "日程"},
+    {"date": "08月30日", "weekday": "日", "time": "10:00", "title": "整理番茄小说更新", "kind": "待办"},
+    {"date": "08月31日", "weekday": "一", "time": "19:30", "title": "晚间散步与照片整理", "kind": "日程"},
+    {"date": "09月01日", "weekday": "二", "time": "16:00", "title": "检查看板长标题与边界", "kind": "待办"}
+  ],
+  "news": [
+    {"title": "今日信息由本地 fixture 提供，未连接真实账号或在线新闻源。"},
+    {"title": "看板服务端只生成图片和小型 manifest，设备端负责主动拉取与缓存。"},
+    {"title": "后续可接入 Agent 卡片，但不会把个人令牌写入 Kindle。"}
+  ],
+  "weather": {"location": "上海", "condition": "多云", "temperature": "27°C", "high_low": "22° / 30°"},
+  "photo_caption": "每日图片占位 · 等待本地照片适配",
+  "sync_status": "演示数据 · 只读 · 最近同步 08:45"
+}

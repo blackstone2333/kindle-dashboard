@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.runtime/
+.goldilocks/ACTIVE.md
+
+# Local pairing and personal-data files. Never publish these.
+dist/
+references/
+*.token
+*.secret
+config.json
+snapshot.json
+apple.json
+device-token
+weather-location.json

@@ -1,0 +1,2 @@
+# Installed locally with: python3 -m pip install --target .runtime/vendor -r requirements-live.txt
+lunar_python==1.4.8
