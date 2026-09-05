@@ -36,6 +36,21 @@ local function short_summary(value)
     return table.concat(value, " · ", 1, math.min(2, #value))
 end
 
+local function countdown_days(item)
+    if not item then return "--" end
+    if item.state == "today" then return "今天" end
+    if item.state == "past" then return "已过 " .. tostring(math.abs(item.days)) .. " 天" end
+    return tostring(item.days) .. " 天"
+end
+
+local function countdown_secondary(items)
+    local labels = {}
+    for _, item in ipairs(items or {}) do
+        labels[#labels + 1] = item.title .. " " .. countdown_days(item)
+    end
+    return table.concat(labels, "   ·   ")
+end
+
 function View:init()
     self.cache = dofile(self.plugin_path .. "/cache.lua")
     self.model = dofile(self.plugin_path .. "/model.lua")
@@ -45,6 +60,8 @@ function View:init()
         schema_version = 1, generated_at = 0, utc_offset = 28800, events = {}, tasks = {}, days = {}, sources = {},
     }
     self.page, self.future_page, self.render_count = 0, 0, 0
+    self.countdown_path = self.root .. "/countdown.json"
+    self.countdown_config = self.cache.read(self.countdown_path) or {version=1,primary_id="primary",targets={}}
     self.month_offset, self.refresh_batches, self.full_refreshes = 0, 0, 1
     self.last_request, self.last_device_poll = 0, os.time()
     self.last_refresh = {at=os.time(),mode="full",regions={"initial"}}
@@ -70,7 +87,7 @@ function View:init()
 end
 
 function View:rebuild()
-    self.data = self.model.build(self.snapshot, os.time(), self.month_offset, self.selected_date)
+    self.data = self.model.build(self.snapshot, os.time(), self.month_offset, self.selected_date, self.countdown_config)
     self.page = math.min(self.page or 0, math.max(0, math.ceil(#self.data.timeline / 6) - 1))
     local display_count = self.selected_date and #self.data.selected or #self.data.future
     self.future_page = math.min(self.future_page or 0, math.max(0, math.ceil(display_count / 5) - 1))
@@ -214,6 +231,21 @@ function View:paintDashboard(bb)
             self:line(bb, 114, y+75, 728, 170)
         end
     end
+    local countdown = d.countdown or {}
+    self:line(bb, 56, 930, 728, 170, 1)
+    if countdown.primary then
+        local primary = countdown.primary
+        self:text(bb, "倒计时", 56, 940, 20, 102, 120)
+        self:text(bb, primary.title, 185, 937, 25, 17, 260)
+        self:text(bb, countdown_days(primary), 728, 932, 43, 0, 250, "right")
+        self:text(bb, "目标 " .. primary.date, 56, 976, 19, 102, 250)
+        if #countdown.secondary > 0 then
+            self:text(bb, countdown_secondary(countdown.secondary), 315, 978, 18, 102, 413, "right")
+        end
+    else
+        self:text(bb, "倒计时", 56, 943, 21, 102, 120)
+        self:text(bb, "点击右侧月历日期即可设置目标日", 185, 941, 22, 102, 543)
+    end
     self:text(bb, d.month_label, 800, 43, 45, 17, 510)
     self:icon(bb, "settings", 1328, 48, 38)
     local weekdays = {"一", "二", "三", "四", "五", "六", "日"}
@@ -272,7 +304,110 @@ function View:writeStatus()
         width = self.dimen.w, height = self.dimen.h, battery = self.footer.battery,
         wifi = self.footer.wifi, sync_error = self.client.error or "",
         snapshot_at = s.generated_at or 0, sources = source_status,
+        countdown = d.countdown,
     })
+end
+
+function View:saveCountdownConfig(config)
+    self.countdown_config = config
+    self.cache.write(self.countdown_path, config)
+    self:rebuild()
+    self:requestUpdates()
+end
+
+function View:setPrimaryCountdown(date)
+    local config = self.countdown_config or {version=1, primary_id="primary", targets={}}
+    config.version = 1
+    config.primary_id = "primary"
+    config.targets = type(config.targets) == "table" and config.targets or {}
+    local found = false
+    for _, target in ipairs(config.targets) do
+        if target.id == "primary" then
+            target.date = date
+            target.enabled = true
+            target.title = target.title or "目标日"
+            found = true
+            break
+        end
+    end
+    if not found then
+        config.targets[#config.targets + 1] = {id="primary", title="目标日", date=date, enabled=true}
+    end
+    self:saveCountdownConfig(config)
+end
+
+function View:addCountdownTarget(date, title)
+    local config = self.countdown_config or {version=1, primary_id="primary", targets={}}
+    config.version = 1
+    config.targets = type(config.targets) == "table" and config.targets or {}
+    config.targets[#config.targets + 1] = {
+        id = "target-" .. tostring(os.time()) .. "-" .. tostring(#config.targets + 1),
+        title = title ~= "" and title or "目标日",
+        date = date,
+        enabled = true,
+    }
+    self:saveCountdownConfig(config)
+end
+
+function View:clearPrimaryCountdown()
+    local config = self.countdown_config or {version=1, primary_id="primary", targets={}}
+    local kept = {}
+    for _, target in ipairs(config.targets or {}) do
+        if target.id ~= "primary" then kept[#kept + 1] = target end
+    end
+    config.targets = kept
+    self:saveCountdownConfig(config)
+end
+
+function View:promptCountdownTitle(date)
+    local InputDialog = require("ui/widget/inputdialog")
+    local dialog
+    dialog = InputDialog:new{
+        title = "新增倒计时名称",
+        input = "目标日",
+        buttons = {{
+            {text="取消", callback=function() UIManager:close(dialog) end},
+            {text="保存", callback=function()
+                local title = dialog:getInputText():gsub("^%s+", ""):gsub("%s+$", "")
+                UIManager:close(dialog)
+                self:addCountdownTarget(date, title)
+            end},
+        }},
+    }
+    UIManager:show(dialog)
+    if dialog.onShowKeyboard then dialog:onShowKeyboard() end
+end
+
+function View:calendarActions(date, same_selected)
+    local dialog
+    local close = function() if dialog then UIManager:close(dialog) end end
+    local buttons = {
+        {{text="查看当天日程", callback=function()
+            close(); self:setSelectedDate(date)
+        end}, {text="设为主倒计时", callback=function()
+            close(); self:setPrimaryCountdown(date)
+        end}},
+        {{text="新增倒计时", callback=function()
+            close(); self:promptCountdownTitle(date)
+        end}, {text="取消", callback=close}},
+    }
+    if same_selected then
+        buttons[1][1] = {text="返回下一周", callback=function()
+            close(); self:setSelectedDate(nil)
+        end}
+    end
+    local primary = self.countdown_config and self.countdown_config.targets
+    for _, target in ipairs(primary or {}) do
+        if target.id == "primary" and target.date == date then
+            buttons[2][2] = {text="清除主倒计时", callback=function()
+                close(); self:clearPrimaryCountdown()
+            end}
+            buttons[#buttons + 1] = {{text="取消", callback=close}}
+            break
+        end
+    end
+    dialog = require("ui/widget/buttondialog"):new{title=date .. " · 月历操作", buttons=buttons}
+    UIManager:show(dialog)
 end
 
 function View:tap(ges)
@@ -290,7 +425,9 @@ function View:tap(ges)
         if column >= 0 and column < 7 and row >= 0 and row < 6 then
             local cell = self.data.month_cells[row * 7 + column + 1]
             if cell then
-                self:setSelectedDate(self.selected_date == cell.date and nil or cell.date)
+                local same_selected = self.selected_date == cell.date
+                self:setSelectedDate(same_selected and nil or cell.date)
+                self:calendarActions(cell.date, same_selected)
                 return true
             end
         end
@@ -322,7 +459,7 @@ function View:tap(ges)
 end
 
 function View:setMonth(offset)
-    local candidate = self.model.build(self.snapshot,os.time(),offset,self.selected_date)
+    local candidate = self.model.build(self.snapshot,os.time(),offset,self.selected_date,self.countdown_config)
     local key = string.format("%04d-%02d-01",candidate.calendar_year,candidate.calendar_month)
     local first,last = self.snapshot.range_start,self.snapshot.range_end
     if type(first)=="string" and type(last)=="string" and (key<first or key>=last) then

@@ -5,6 +5,7 @@ local function clone(t)
 end
 local data={clock="10:00",date_label="日期",lunar="农历",month_label="月份",month_cells={{day=1}},
     solar_term="节气",next_solar_term="下个",almanac={yi={"a","b","c"},ji={"d"}},
+    countdown={enabled=true,primary={title="法考",days=43,state="upcoming",date="2026-10-18"},secondary={}},
     timeline={{title="安排",time="10:00",kind="日程",meta={calendar="日历"}}},future={}}
 for i=1,12 do data.future[i]={title="日程"..i,time="09:00",date="09月07日 一",kind="日程"} end
 local snap={generated_at=10,sources={calendar={ok=true,updated_at=10}},
@@ -31,6 +32,8 @@ d=clone(data);d.timeline[1].title="edit"
 check("visible event edit changes timeline",d,snap,0,footer,"timeline")
 local f=clone(footer);f.wifi=false
 check("wifi changes only footer",data,snap,0,f,"footer")
+local d=clone(data);d.countdown.primary.days=42
+check("countdown changes only countdown region",d,snap,0,footer,"countdown")
 
 local M = dofile(arg[2] or "device/koreader/plugins/kindleagentdashboard.koplugin/model.lua")
 local now = 1788588000

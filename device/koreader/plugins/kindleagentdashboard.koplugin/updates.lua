@@ -1,9 +1,9 @@
 -- Compare only what is visible, not sync timestamps or off-screen records.
 local Updates = {}
-Updates.order = {"clock", "date", "weather", "timeline", "calendar", "almanac", "future", "footer"}
+Updates.order = {"clock", "date", "weather", "timeline", "countdown", "calendar", "almanac", "future", "footer"}
 Updates.regions = {
     clock={40,20,390,130}, date={50,155,390,90}, weather={440,40,300,205},
-    timeline={50,310,690,635}, calendar={792,36,612,465},
+    timeline={50,310,690,635}, countdown={50,930,690,78}, calendar={792,36,612,465},
     almanac={792,512,615,79}, future={792,608,615,397}, footer={1276,1018,110,36},
 }
 
@@ -41,6 +41,7 @@ function Updates.capture(data,snapshot,page,future_page,footer)
     local almanac = data.almanac or {}
     local calendar_ok = ((snapshot.sources or {}).calendar or {}).ok
     local display = data.selected_date and data.selected or data.future
+    local countdown = data.countdown or {}
     return {
         clock=data.clock, date={data.date_label,data.lunar},
         weather={location=weather.location,icon=weather.icon,condition=weather.condition,
@@ -48,6 +49,7 @@ function Updates.capture(data,snapshot,page,future_page,footer)
             rain=rounded(weather.rain_probability),wind=rounded(weather.wind_level),uv=uv},
         timeline={rows=rows(data.timeline,page,6),page=page,pages=math.max(1,math.ceil(#data.timeline/6)),
             empty_ok=#data.timeline==0 and calendar_ok or false},
+        countdown=countdown,
         calendar={data.month_label,data.month_cells,selected_date=data.selected_date},
         almanac={data.solar_term,data.next_solar_term,firstTwo(almanac.yi),firstTwo(almanac.ji)},
         future={selected_date=data.selected_date,selected_label=data.selected_label,

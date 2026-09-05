@@ -283,6 +283,38 @@ execute("selected calendar day builds its own schedule", function()
     assert_eq(out.selected[2].title, "周日待办")
 end)
 
+execute("countdown targets use local calendar days and keep three targets", function()
+    local now = 1788572400 -- 2026-09-05 09:00 +08:00
+    local out = model.build({events={},tasks={}}, now, 0, nil, {
+        primary_id = "primary",
+        targets = {
+            {id="primary", title="法考", date="2026-10-18"},
+            {id="subjective", title="主观题", date="2026-11-01"},
+            {id="result", title="成绩", date="2026-12-01"},
+            {id="fourth", title="不显示", date="2027-01-01"},
+        },
+    })
+    assert_true(out.countdown.enabled, "countdown enabled")
+    assert_eq(out.countdown.primary.title, "法考")
+    assert_eq(out.countdown.primary.days, 43)
+    assert_eq(#out.countdown.secondary, 2)
+    assert_eq(out.countdown.secondary[1].title, "主观题")
+end)
+
+execute("countdown marks today and past targets", function()
+    local now = 1788572400 -- 2026-09-05 09:00 +08:00
+    local out = model.build({events={},tasks={}}, now, 0, nil, {
+        primary_id = "today",
+        targets = {
+            {id="today", title="今天", date="2026-09-05"},
+            {id="past", title="已过", date="2026-09-04"},
+        },
+    })
+    assert_eq(out.countdown.primary.state, "today")
+    assert_eq(out.countdown.secondary[1].state, "past")
+    assert_eq(out.countdown.secondary[1].days, -1)
+end)
+
 if failures > 0 then
     io.stderr:write("device model tests failed: " .. failures .. "\n")
     os.exit(1)

@@ -167,6 +167,54 @@ function M.dateKey(epoch, offset)
     return string.format("%04d-%02d-%02d", local_time.year, local_time.month, local_time.day)
 end
 
+local function countdown_target(target, today_day)
+    if type(target) ~= "table" or target.enabled == false then
+        return nil
+    end
+    local target_date = as_string(target.date) or as_string(target.target_date)
+    local target_day = parse_ymd(target_date)
+    if not target_day then
+        return nil
+    end
+    local days = target_day - today_day
+    local state = days > 0 and "upcoming" or days == 0 and "today" or "past"
+    return {
+        id = as_string(target.id) or target_date,
+        title = trim(as_string(target.title) or "目标日"),
+        date = target_date,
+        days = days,
+        state = state,
+    }
+end
+
+local function build_countdown(config, today_day)
+    local result = {enabled = false, primary = nil, secondary = {}, count = 0}
+    if type(config) ~= "table" or type(config.targets) ~= "table" then
+        return result
+    end
+    local primary_id = as_string(config.primary_id) or "primary"
+    local targets = {}
+    for _, raw in ipairs(config.targets) do
+        local target = countdown_target(raw, today_day)
+        if target then
+            targets[#targets + 1] = target
+        end
+    end
+    table.sort(targets, function(a, b)
+        if a.id == primary_id and b.id ~= primary_id then return true end
+        if b.id == primary_id and a.id ~= primary_id then return false end
+        if a.days ~= b.days then return a.days < b.days end
+        return a.id < b.id
+    end)
+    result.count = #targets
+    result.enabled = #targets > 0
+    result.primary = targets[1]
+    for index = 2, math.min(#targets, 3) do
+        result.secondary[#result.secondary + 1] = targets[index]
+    end
+    return result
+end
+
 local function parse_event(item, index)
     if type(item) ~= "table" then
         return nil
@@ -346,7 +394,7 @@ local function timeline_comparator(a, b)
     return tostring(a.id) < tostring(b.id)
 end
 
-function M.build(snapshot, now_epoch, month_offset, selected_date)
+function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_config)
     local source = (type(snapshot) == "table") and snapshot or {}
     local offset = as_number(source.utc_offset) or DEFAULT_OFFSET
     local epoch_now = as_number(now_epoch) or os.time()
@@ -590,6 +638,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date)
             yi = (day_meta_almanac and day_meta_almanac.yi) or "暂无",
             ji = (day_meta_almanac and day_meta_almanac.ji) or "暂无",
         },
+        countdown = build_countdown(countdown_config, now_day),
         timeline = timeline,
         future = future,
         selected = selected,
