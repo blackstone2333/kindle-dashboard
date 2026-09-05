@@ -247,6 +247,7 @@ execute("overlapping midnight spans", function()
         if item.id == "event:midnight" then
             future_hits = future_hits + 1
             assert_eq(item.date, "09月05日 六")
+            assert_eq(item.target_date, "2026-09-05")
             assert_eq(item.time, "23:30")
         end
     end
@@ -281,6 +282,8 @@ execute("selected calendar day builds its own schedule", function()
     assert_eq(#out.selected, 2)
     assert_eq(out.selected[1].title, "周日会议")
     assert_eq(out.selected[2].title, "周日待办")
+    assert_eq(out.selected[1].target_date, "2026-09-07")
+    assert_eq(out.selected[2].target_date, "2026-09-07")
 end)
 
 execute("countdown targets use local calendar days and keep three targets", function()

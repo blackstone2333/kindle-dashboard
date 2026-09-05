@@ -476,6 +476,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
                     id = id,
                     title = event.title,
                     date = string.format("%02d月%02d日 %s", ev_month, ev_day, WEEKDAY_SHORT[((event_day + 3) % 7) + 1]),
+                    target_date = day_key_from_day(event_day),
                     time = event.all_day and "全天" or format_clock(event.start, offset),
                     kind = "日程",
                     meta = event.meta,
@@ -499,6 +500,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
                     id = id,
                     title = task.title,
                     date = string.format("%02d月%02d日 %s", ev_month, ev_day, WEEKDAY_SHORT[((due_day + 3) % 7) + 1]),
+                    target_date = day_key_from_day(due_day),
                     time = due_time,
                     kind = "待办",
                     meta = task.meta,
@@ -516,6 +518,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
                     id = id,
                     title = task.title,
                     date = string.format("%02d月%02d日 %s", ev_month, ev_day, WEEKDAY_SHORT[((due_day + 3) % 7) + 1]),
+                    target_date = day_key_from_day(due_day),
                     time = "未定时",
                     kind = "待办",
                     meta = task.meta,
@@ -561,6 +564,8 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
                 local end_day = local_day_number(event.stop - 1, offset)
                 if start_day and end_day and selected_day_number >= start_day and selected_day_number <= end_day then
                     local item = build_timeline_event(event, day_start_epoch(selected_day_number, offset), offset)
+                    item.date = selected_label
+                    item.target_date = selected_date
                     item._day = selected_day_number
                     table.insert(selected, item)
                 end
@@ -570,6 +575,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
                 if due_day == selected_day_number then
                     table.insert(selected, {
                         id = "task:" .. task.id, title = task.title, kind = "待办",
+                        date = selected_label, target_date = selected_date,
                         time = task.has_time and format_clock(task.due, offset) or "未定时",
                         meta = task.meta, sort_epoch = task.due or day_start_epoch(selected_day_number, offset),
                         order = task.has_time and 2 or 4, _day = selected_day_number,

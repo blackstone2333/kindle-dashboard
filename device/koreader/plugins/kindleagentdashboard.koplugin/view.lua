@@ -315,7 +315,7 @@ function View:saveCountdownConfig(config)
     self:requestUpdates()
 end
 
-function View:setPrimaryCountdown(date)
+function View:setPrimaryCountdown(date, title)
     local config = self.countdown_config or {version=1, primary_id="primary", targets={}}
     config.version = 1
     config.primary_id = "primary"
@@ -325,13 +325,13 @@ function View:setPrimaryCountdown(date)
         if target.id == "primary" then
             target.date = date
             target.enabled = true
-            target.title = target.title or "目标日"
+            target.title = title or target.title or "目标日"
             found = true
             break
         end
     end
     if not found then
-        config.targets[#config.targets + 1] = {id="primary", title="目标日", date=date, enabled=true}
+        config.targets[#config.targets + 1] = {id="primary", title=title or "目标日", date=date, enabled=true}
     end
     self:saveCountdownConfig(config)
 end
@@ -359,60 +359,31 @@ function View:clearPrimaryCountdown()
     self:saveCountdownConfig(config)
 end
 
-function View:promptCountdownTitle(date)
-    local InputDialog = require("ui/widget/inputdialog")
-    local dialog
-    dialog = InputDialog:new{
-        title = "新增倒计时名称",
-        input = "目标日",
-        buttons = {{
-            {text="取消", callback=function() UIManager:close(dialog) end},
-            {text="保存", callback=function()
-                local title = dialog:getInputText():gsub("^%s+", ""):gsub("%s+$", "")
-                UIManager:close(dialog)
-                self:addCountdownTarget(date, title)
-            end},
-        }},
-    }
-    UIManager:show(dialog)
-    if dialog.onShowKeyboard then dialog:onShowKeyboard() end
-end
-
-function View:calendarActions(date, same_selected)
+function View:scheduleActions(item)
+    local date = item and item.target_date
+    if type(date) ~= "string" or date == "" then
+        UIManager:show(require("ui/widget/infomessage"):new{text="这个日程没有可用的目标日期。"})
+        return
+    end
+    local title = str(item.title, "目标日")
     local dialog
     local close = function() if dialog then UIManager:close(dialog) end end
     local buttons = {
-        {{text="查看当天日程", callback=function()
-            close(); self:setSelectedDate(date)
-        end}, {text="设为主倒计时", callback=function()
-            close(); self:setPrimaryCountdown(date)
+        {{text="设为主倒计时", callback=function()
+            close(); self:setPrimaryCountdown(date, title)
+        end}, {text="新增倒计时", callback=function()
+            close(); self:addCountdownTarget(date, title)
         end}},
-        {{text="新增倒计时", callback=function()
-            close(); self:promptCountdownTitle(date)
-        end}, {text="取消", callback=close}},
+        {{text="取消", callback=close}},
     }
-    if same_selected then
-        buttons[1][1] = {text="返回下一周", callback=function()
-            close(); self:setSelectedDate(nil)
-        end}
-    end
-    local primary = self.countdown_config and self.countdown_config.targets
-    for _, target in ipairs(primary or {}) do
-        if target.id == "primary" and target.date == date then
-            buttons[2][2] = {text="清除主倒计时", callback=function()
-                close(); self:clearPrimaryCountdown()
-            end}
-            buttons[#buttons + 1] = {{text="取消", callback=close}}
-            break
-        end
-    end
+    local display_date = item.date or date
     -- The dialog is opened from the calendar tap handler.  If it remains
-    -- dismissable, KOReader can deliver that same tap to the dialog's
+    -- dismissable, KOReader can deliver the schedule tap to the dialog's
     -- full-screen TapClose range and immediately close it again.  Keep an
     -- explicit 取消 button instead, so the first tap reliably leaves the
     -- action menu visible.
     dialog = require("ui/widget/buttondialog"):new{
-        title=date .. " · 月历操作",
+        title=display_date .. " · " .. title,
         buttons=buttons,
         dismissable=false,
     }
@@ -436,7 +407,6 @@ function View:tap(ges)
             if cell then
                 local same_selected = self.selected_date == cell.date
                 self:setSelectedDate(same_selected and nil or cell.date)
-                self:calendarActions(cell.date, same_selected)
                 return true
             end
         end
@@ -451,9 +421,7 @@ function View:tap(ges)
     if x >= 800 and y >= 670 and y < 1008 then
         local display = self:displayItems()
         local item = display[self.future_page*5 + math.floor((y-670)/67) + 1]
-        if item then UIManager:show(require("ui/widget/infomessage"):new{
-            text=item.date .. "  " .. item.time .. "\n\n" .. item.title .. "\n\n" .. item.kind .. " · " .. meta(item),
-        }) end
+        if item then self:scheduleActions(item) end
         return true
     end
     if x < 760 and y >= 376 and y <= 944 then
