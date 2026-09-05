@@ -34,6 +34,7 @@ function Cache.valid(snapshot)
     return type(snapshot) == "table" and snapshot.schema_version == 1
         and type(snapshot.events) == "table" and type(snapshot.tasks) == "table"
         and type(snapshot.generated_at) == "number"
+        and (snapshot.cards == nil or type(snapshot.cards) == "table")
 end
 
 return Cache

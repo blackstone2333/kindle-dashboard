@@ -15,7 +15,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Iterable, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, unquote, urlsplit
 from urllib.request import Request, urlopen
 
 
@@ -31,6 +31,8 @@ WEATHER_SECONDS = 30 * 60
 EXPORT_SECONDS = 60
 REQUEST_TIMEOUT = 8
 EMPTY_ALMANAC = {"yi": "暂无", "ji": "暂无"}
+CARD_MAX_BYTES = 256 * 1024
+CARD_TYPES = {"briefing", "news", "english", "divination", "photo", "quote", "horoscope", "question", "task"}
 
 
 def _epoch() -> int:
@@ -125,12 +127,14 @@ class SnapshotHub:
         self.city = city
         self.latitude, self.longitude = 31.2304, 121.4737
         self.location_path = self.data_dir / "weather-location.json"
+        self.cards_path = self.data_dir / "cards.json"
         self.now = now
         self.exporter = Path(exporter) if exporter else Path(__file__).resolve().parents[1] / "connectors" / "macos" / "export_snapshot.py"
         self.export_path = self.data_dir / "apple.json"
         self.state_path = self.data_dir / "snapshot-cache.json"
         self.lock = threading.RLock()
         self.token = self._load_token()
+        self.agent_token = self._load_secret("agent-token")
         start, end = _date_range()
         self.state: Dict[str, Any] = {
             "events": [], "tasks": [], "range_start": start.isoformat(), "range_end": end.isoformat(),
@@ -140,7 +144,24 @@ class SnapshotHub:
             "weather": _empty_weather(city),
         }
         self._load_state()
+        self._load_cards()
         self._load_location()
+
+    def _load_secret(self, name: str) -> str:
+        path = self.data_dir / name
+        if path.exists():
+            try:
+                value = path.read_text(encoding="utf-8").strip()
+                if value:
+                    os.chmod(path, 0o600)
+                    return value
+            except OSError:
+                pass
+        value = secrets.token_urlsafe(32)
+        descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(value + "\n")
+        return value
 
     def _load_location(self) -> bool:
         try:
@@ -180,6 +201,76 @@ class SnapshotHub:
                 self.state.update({key: cached[key] for key in self.state if key in cached})
         except (OSError, ValueError, TypeError):
             return
+
+    def _load_cards(self) -> None:
+        self.cards: Dict[str, Dict[str, Any]] = {}
+        try:
+            document = json.loads(self.cards_path.read_text(encoding="utf-8"))
+            if isinstance(document, dict):
+                for card_id, card in document.items():
+                    if isinstance(card_id, str) and isinstance(card, dict):
+                        self.cards[card_id] = copy.deepcopy(card)
+        except (OSError, ValueError, TypeError):
+            return
+
+    def _save_cards(self) -> None:
+        temporary = self.cards_path.with_suffix(".tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(self.cards, handle, ensure_ascii=False, separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, self.cards_path)
+        os.chmod(self.cards_path, 0o600)
+
+    def put_card(self, card_id: str, card: Dict[str, Any]) -> Dict[str, Any]:
+        if not card_id or len(card_id) > 120 or not isinstance(card, dict):
+            raise ValueError("invalid card")
+        kind = str(card.get("type") or card.get("kind") or "").strip().lower()
+        if kind not in CARD_TYPES:
+            raise ValueError("unsupported card type")
+        title = str(card.get("title") or "").strip()
+        body = str(card.get("body") or "").strip()
+        if not title or len(title) > 160 or len(body) > 8000:
+            raise ValueError("invalid card text")
+        normalized = copy.deepcopy(card)
+        normalized["id"] = card_id
+        normalized["type"] = kind
+        normalized["title"] = title
+        normalized["body"] = body
+        normalized.setdefault("generated_at", _epoch())
+        if not isinstance(normalized["generated_at"], (int, float)):
+            raise ValueError("invalid generated_at")
+        if "expires_at" in normalized and normalized["expires_at"] is not None \
+                and not isinstance(normalized["expires_at"], (int, float)):
+            raise ValueError("invalid expires_at")
+        encoded = json.dumps(normalized, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if len(encoded) > CARD_MAX_BYTES:
+            raise ValueError("card too large")
+        with self.lock:
+            self.cards[card_id] = normalized
+            self._save_cards()
+        return copy.deepcopy(normalized)
+
+    def delete_card(self, card_id: str) -> bool:
+        with self.lock:
+            existed = card_id in self.cards
+            if existed:
+                del self.cards[card_id]
+                self._save_cards()
+            return existed
+
+    def active_cards(self) -> list[Dict[str, Any]]:
+        now = self.now()
+        with self.lock:
+            expired = [key for key, card in self.cards.items()
+                       if isinstance(card.get("expires_at"), (int, float)) and card["expires_at"] <= now]
+            if expired:
+                for key in expired:
+                    del self.cards[key]
+                self._save_cards()
+            return sorted((copy.deepcopy(card) for card in self.cards.values()),
+                          key=lambda card: (-int(card.get("priority", 0) or 0), str(card.get("id", ""))))
 
     def _save_state(self) -> None:
         temporary = self.state_path.with_suffix(".tmp")
@@ -294,11 +385,12 @@ class SnapshotHub:
             return {"schema_version": 1, "version": 1, "generated_at": self.state.get("generated_at") or 0, "timezone": "Asia/Shanghai",
                     "range_start": range_start.isoformat(), "range_end": range_end.isoformat(),
                     "utc_offset": 28800, "events": copy.deepcopy(self.state["events"]), "tasks": copy.deepcopy(self.state["tasks"]),
-                    "days": days, "weather": weather, "sources": sources}
+                    "days": days, "weather": weather, "sources": sources, "cards": self.active_cards()}
 
     def health(self) -> Dict[str, Any]:
         with self.lock:
             return {"ok": True, "events": len(self.state["events"]), "tasks": len(self.state["tasks"]),
+                    "cards": len(self.active_cards()),
                     "calendar_ok": bool(self.state["sources"]["calendar"].get("ok")),
                     "reminders_ok": bool(self.state["sources"]["reminders"].get("ok")),
                     "weather_ok": bool(self.state["weather"].get("ok"))}
@@ -328,6 +420,19 @@ class SnapshotHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _authorized(self, token: str) -> bool:
+        expected = "Bearer " + token
+        supplied = self.headers.get("Authorization", "")
+        return hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8"))
+
+    def _card_id(self) -> Optional[str]:
+        path = urlsplit(self.path).path
+        prefix = "/api/v1/cards/"
+        if not path.startswith(prefix) or not path[len(prefix):]:
+            return None
+        value = unquote(path[len(prefix):])
+        return value if "/" not in value else None
+
     def do_GET(self) -> None:
         if self.path == "/health":
             self._json(200, self.hub.health())
@@ -335,15 +440,42 @@ class SnapshotHandler(BaseHTTPRequestHandler):
         if self.path != "/api/v1/snapshot":
             self._json(404, {"error": "not found"})
             return
-        expected = "Bearer " + self.hub.token
-        supplied = self.headers.get("Authorization", "")
-        if not hmac.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+        if not self._authorized(self.hub.token):
             self.send_response(401)
             self.send_header("WWW-Authenticate", "Bearer")
             self.send_header("Content-Length", "0")
             self.end_headers()
             return
         self._json(200, self.hub.build_snapshot())
+
+    def do_PUT(self) -> None:
+        card_id = self._card_id()
+        if card_id is None:
+            self._json(404, {"error": "not found"})
+            return
+        if not self._authorized(self.hub.agent_token):
+            self._json(401, {"error": "unauthorized"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "-1"))
+            if length < 0 or length > CARD_MAX_BYTES:
+                raise ValueError("invalid content length")
+            document = json.loads(self.rfile.read(length).decode("utf-8"))
+            card = self.hub.put_card(card_id, document)
+        except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            self._json(400, {"error": str(error)})
+            return
+        self._json(200, {"ok": True, "card": card})
+
+    def do_DELETE(self) -> None:
+        card_id = self._card_id()
+        if card_id is None:
+            self._json(404, {"error": "not found"})
+            return
+        if not self._authorized(self.hub.agent_token):
+            self._json(401, {"error": "unauthorized"})
+            return
+        self._json(200, {"ok": self.hub.delete_card(card_id)})
 
 
 def _worker(hub: SnapshotHub, stop: threading.Event) -> None:

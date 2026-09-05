@@ -441,7 +441,7 @@ function View:setMonth(offset)
     local first,last = self.snapshot.range_start,self.snapshot.range_end
     if type(first)=="string" and type(last)=="string" and (key<first or key>=last) then
         UIManager:show(require("ui/widget/infomessage"):new{
-            text="目前已同步上月、当月和下月的日程。\n点月份标题可回到当月。",
+            text="目前已同步前两个月、当月和后两个月的日程。\n点月份标题可回到当月。",
         })
         return
     end

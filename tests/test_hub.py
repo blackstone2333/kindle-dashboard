@@ -53,6 +53,34 @@ class HubTests(unittest.TestCase):
         self.assertEqual(doc["weather"]["wind_level"], 3)
         self.assertEqual(doc["weather"]["location"], "上海")
 
+    def test_agent_card_is_cached_exposed_and_expired(self):
+        card = self.hub.put_card("divination-2026-09-05", {
+            "type": "divination", "title": "今日一签", "body": "宜静心读书，娱乐内容。",
+            "generated_at": 100, "expires_at": 200, "symbol": "中签",
+        })
+        self.assertEqual(card["id"], "divination-2026-09-05")
+        self.hub.now = lambda: 150
+        self.assertEqual(self.hub.build_snapshot()["cards"][0]["type"], "divination")
+        self.hub.now = lambda: 201
+        self.assertEqual(self.hub.build_snapshot()["cards"], [])
+
+    def test_agent_card_endpoint_uses_separate_token(self):
+        SnapshotHandler.hub = self.hub
+        server = ThreadingHTTPServer(("127.0.0.1", 0), SnapshotHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            conn = HTTPConnection("127.0.0.1", server.server_port)
+            body = json.dumps({"type": "divination", "title": "今日一卦", "body": "宜静心"})
+            conn.request("PUT", "/api/v1/cards/today", body=body,
+                         headers={"Content-Type": "application/json", "Authorization": "Bearer " + self.hub.agent_token})
+            self.assertEqual(conn.getresponse().status, 200)
+            conn.request("GET", "/api/v1/snapshot", headers={"Authorization": "Bearer " + self.hub.token})
+            snapshot = json.loads(conn.getresponse().read())
+            self.assertEqual(snapshot["cards"][0]["type"], "divination")
+        finally:
+            server.shutdown(); server.server_close()
+
     def test_lunar_label_and_current_solar_term(self):
         day = _calendar_day(dt.date(2026, 9, 5))
         self.assertTrue(day["lunar"].startswith("农历七月"))
