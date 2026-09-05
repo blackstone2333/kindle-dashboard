@@ -35,7 +35,7 @@ local function firstTwo(value)
     return {value[1],value[2]}
 end
 
-function Updates.capture(data,snapshot,page,future_page,footer)
+function Updates.capture(data,snapshot,page,future_page,footer,left_card,right_card,card_page)
     local weather = type(snapshot.weather) == "table" and snapshot.weather or {}
     local uv = type(weather.uv) == "number" and (weather.uv < 3 and "低" or weather.uv < 6 and "中" or "高") or "--"
     local almanac = data.almanac or {}
@@ -47,12 +47,12 @@ function Updates.capture(data,snapshot,page,future_page,footer)
         weather={location=weather.location,icon=weather.icon,condition=weather.condition,
             temperature=rounded(weather.temperature),low=rounded(weather.low),high=rounded(weather.high),
             rain=rounded(weather.rain_probability),wind=rounded(weather.wind_level),uv=uv},
-        timeline={rows=rows(data.timeline,page,6),page=page,pages=math.max(1,math.ceil(#data.timeline/6)),
+        timeline={slot=left_card or 1,card_page=card_page or 0,rows=rows(data.timeline,page,6),page=page,pages=math.max(1,math.ceil(#data.timeline/6)),
             empty_ok=#data.timeline==0 and calendar_ok or false},
-        countdown=countdown,
+        countdown={slot=left_card or 1,value=countdown,cards=data.cards},
         calendar={data.month_label,data.month_cells,selected_date=data.selected_date},
         almanac={data.solar_term,data.next_solar_term,firstTwo(almanac.yi),firstTwo(almanac.ji)},
-        future={selected_date=data.selected_date,selected_label=data.selected_label,
+        future={slot=right_card or 1,card_page=card_page or 0,selected_date=data.selected_date,selected_label=data.selected_label,
             rows=rows(display,future_page,5),page=future_page,pages=math.max(1,math.ceil(#display/5))},
         footer={wifi=footer.wifi,battery_icon=footer.battery_icon},
     }

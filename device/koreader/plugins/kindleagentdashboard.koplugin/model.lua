@@ -394,6 +394,33 @@ local function timeline_comparator(a, b)
     return tostring(a.id) < tostring(b.id)
 end
 
+local function agent_cards(snapshot, now_epoch)
+    local result = {}
+    local cards = type(snapshot.cards) == "table" and snapshot.cards or {}
+    for _, card in ipairs(cards) do
+        if type(card) == "table" and type(card.title) == "string" and card.title ~= "" then
+            local expires_at = tonumber(card.expires_at)
+            if not expires_at or expires_at > now_epoch then
+                result[#result + 1] = {
+                    id = tostring(card.id or #result + 1),
+                    type = tostring(card.type or "briefing"),
+                    title = card.title,
+                    body = type(card.body) == "string" and card.body or "",
+                    symbol = type(card.symbol) == "string" and card.symbol or nil,
+                    source_url = type(card.source_url) == "string" and card.source_url or nil,
+                    generated_at = tonumber(card.generated_at) or 0,
+                    priority = tonumber(card.priority) or 0,
+                }
+            end
+        end
+    end
+    table.sort(result, function(a, b)
+        if a.priority ~= b.priority then return a.priority > b.priority end
+        return a.id < b.id
+    end)
+    return result
+end
+
 function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_config)
     local source = (type(snapshot) == "table") and snapshot or {}
     local offset = as_number(source.utc_offset) or DEFAULT_OFFSET
@@ -651,6 +678,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
         selected_date = selected_date,
         selected_label = selected_label,
         month_cells = month_cells,
+        cards = agent_cards(source, epoch_now),
     }
 end
 

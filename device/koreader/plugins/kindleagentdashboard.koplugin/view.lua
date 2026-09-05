@@ -56,6 +56,7 @@ function View:init()
         schema_version = 1, generated_at = 0, utc_offset = 28800, events = {}, tasks = {}, days = {}, sources = {},
     }
     self.page, self.future_page, self.render_count = 0, 0, 0
+    self.left_card, self.right_card, self.card_page = 1, 1, 0
     self.countdown_path = self.root .. "/countdown.json"
     self.countdown_config = self.cache.read(self.countdown_path) or {version=1,primary_id="primary",targets={}}
     self.month_offset, self.refresh_batches, self.full_refreshes = 0, 0, 1
@@ -68,7 +69,7 @@ function View:init()
     self.font_name = self.font_name or "NotoSansCJKsc-Regular.otf"
     self:rebuild()
     self:readFooter()
-    self.visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer)
+    self.visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page)
     self:registerTouchZones({
         { id = "dashboard_tap", ges = "tap", screen_zone = {ratio_x=0,ratio_y=0,ratio_w=1,ratio_h=1},
           handler = function(ges) return self:tap(ges) end },
@@ -104,7 +105,7 @@ function View:readFooter()
 end
 
 function View:requestUpdates()
-    local visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer)
+    local visual = self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page)
     local changed = self.updates.changed(self.visual,visual)
     self.visual = visual
     if #changed > 0 then
@@ -178,6 +179,91 @@ function View:icon(bb, name, x, y, size, dim)
         self.icons[key] = widget
     end
     widget:paintTo(bb, self:px(x), self:px(y))
+end
+
+function View:cardTypeLabel(kind)
+    return ({divination="每日卜卦",news="今日要闻",briefing="Agent 简报",english="每日英语",
+        photo="每日图片",quote="每日语录",horoscope="星座运势",question="每日一题",task="随机任务"})[kind] or "Agent 卡片"
+end
+
+function View:cardBodyLines(body, limit)
+    local result = {}
+    for line in tostring(body or ""):gmatch("[^\n]+") do
+        -- TextWidget performs width clipping; do not byte-slice UTF-8 Chinese
+        -- strings here because a Lua byte boundary can corrupt a character.
+        if #result < limit and line ~= "" then result[#result + 1] = line end
+        if #result >= limit then break end
+    end
+    return result
+end
+
+function View:paintCountdownCard(bb)
+    local d = self.data
+    self:rect(bb, 50, 305, 690, 700, 255)
+    self:line(bb, 56, 326, 728, 170, 2)
+    self:text(bb, "倒计时目标", 56, 345, 34, 17, 320)
+    self:text(bb, "左右滑动切换卡片", 728, 357, 18, 102, 250, "right")
+    local countdown = d.countdown or {}
+    if countdown.primary then
+        local primary = countdown.primary
+        self:text(bb, countdown_days(primary), 56, 420, 88, 0, 340)
+        self:text(bb, primary.title, 56, 535, 34, 17, 610)
+        self:text(bb, "目标日期  " .. str(primary.date, "暂无"), 56, 590, 24, 85, 500)
+        self:line(bb, 56, 635, 728, 170)
+        local secondary = countdown.secondary or {}
+        if #secondary == 0 then self:text(bb, "暂无其他倒计时目标", 56, 675, 24, 102, 500) end
+        for index, item in ipairs(secondary) do
+            if index <= 5 then
+                self:text(bb, countdown_secondary_label(item), 56, 675 + (index - 1) * 48, 24, 51, 650)
+            end
+        end
+    else
+        self:text(bb, "还没有主倒计时", 56, 450, 42, 17, 600)
+        self:text(bb, "点击右侧日程条目，可设为主倒计时或新增目标", 56, 525, 24, 85, 650)
+    end
+end
+
+function View:paintAgentCard(bb, x, y, w, h)
+    local cards = self.data.cards or {}
+    self:rect(bb, x, y, w, h, 255)
+    self:line(bb, x + 6, y + 21, x + w - 6, 170, 2)
+    if #cards == 0 then
+        self:text(bb, "Agent 卡片", x + 6, y + 42, 34, 17, w - 20)
+        self:text(bb, "暂无内容，等待 Agent 推送", x + 6, y + 130, 28, 85, w - 20)
+        return
+    end
+    local index = (self.card_page % #cards) + 1
+    local card = cards[index]
+    self:text(bb, self:cardTypeLabel(card.type), x + 6, y + 42, 25, 102, w - 20)
+    self:text(bb, card.title, x + 6, y + 84, 38, 17, w - 20)
+    if card.symbol then self:text(bb, card.symbol, x + w - 8, y + 47, 23, 51, 170, "right") end
+    local lines = self:cardBodyLines(card.body, h > 500 and 8 or 4)
+    for line_no, line in ipairs(lines) do
+        self:text(bb, line, x + 6, y + 145 + (line_no - 1) * 43, 25, 51, w - 20)
+    end
+    if #cards > 1 then
+        self:text(bb, tostring(index) .. "/" .. tostring(#cards) .. " · 上下滑动翻页", x + w - 8, y + h - 25, 18, 102, 260, "right")
+    end
+end
+
+function View:paintRightDayCard(bb)
+    local d = self.data
+    self:rect(bb, 792, 590, 612, 420, 255)
+    self:line(bb, 800, 612, 1400, 170, 2)
+    self:text(bb, "当天日程", 800, 630, 34, 17, 270)
+    local items = d.selected_date and d.selected or d.timeline or {}
+    if #items == 0 then
+        self:text(bb, d.selected_date and "当天暂无安排" or "今天暂无安排", 800, 730, 28, 102, 570)
+        return
+    end
+    for index = 1, math.min(5, #items) do
+        local item = items[index]
+        local y = 685 + (index - 1) * 59
+        self:text(bb, item.time, 800, y, 21, 51, 90)
+        self:text(bb, item.title, 900, y - 2, 27, 17, 390)
+        self:text(bb, item.kind, 1400, y + 29, 18, 102, 120, "right")
+        self:line(bb, 800, y + 47, 1400, 170)
+    end
 end
 
 function View:paintTo(bb)
@@ -284,6 +370,18 @@ function View:paintDashboard(bb)
     self:icon(bb, "sun", 72, 1021, 30)
     self:icon(bb, self.footer.wifi and "wifi" or "wifi-off", 1288, 1021, 30, not self.footer.wifi)
     self:icon(bb, self.footer.battery_icon, 1344, 1021, 30)
+    -- The fixed top area remains untouched.  Card slots overlay only their
+    -- lower regions so switching pages can stay a local refresh on e-ink.
+    if self.left_card == 2 then
+        self:paintCountdownCard(bb)
+    elseif self.left_card == 3 then
+        self:paintAgentCard(bb, 50, 305, 690, 700)
+    end
+    if self.right_card == 2 then
+        self:paintRightDayCard(bb)
+    elseif self.right_card == 3 then
+        self:paintAgentCard(bb, 792, 590, 612, 420)
+    end
     self.render_count = self.render_count + 1
     self:writeStatus()
 end
@@ -464,11 +562,27 @@ function View:swipe(ges)
     if x>=760 and y>=145 and y<505 then
         self:setMonth(self.month_offset+delta)
         return true
-    elseif x<760 and y>=310 and y<950 then
-        self.page = (self.page + delta) % math.max(1, math.ceil(#self.data.timeline/6))
+    elseif x<760 and y>=310 and y<1014 then
+        if ges.direction == "west" or ges.direction == "east" then
+            self.left_card = (self.left_card + delta - 1) % 3 + 1
+            self.card_page = 0
+            self.page = 0
+        elseif self.left_card == 3 then
+            self.card_page = (self.card_page + delta) % math.max(1, #self.data.cards)
+        else
+            self.page = (self.page + delta) % math.max(1, math.ceil(#self.data.timeline/6))
+        end
     elseif x>=760 and y>=608 and y<1014 then
-        local display_count = self.selected_date and #self.data.selected or #self.data.future
-        self.future_page = (self.future_page + delta) % math.max(1, math.ceil(display_count/5))
+        if ges.direction == "west" or ges.direction == "east" then
+            self.right_card = (self.right_card + delta - 1) % 3 + 1
+            self.card_page = 0
+            self.future_page = 0
+        elseif self.right_card == 3 then
+            self.card_page = (self.card_page + delta) % math.max(1, #self.data.cards)
+        else
+            local display_count = self.selected_date and #self.data.selected or #self.data.future
+            self.future_page = (self.future_page + delta) % math.max(1, math.ceil(display_count/5))
+        end
     end
     self:requestUpdates()
     return true
@@ -537,7 +651,7 @@ function View:onResume()
     self.last_request = 0
     self:rebuild()
     self:readFooter()
-    self.visual=self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer)
+    self.visual=self.updates.capture(self.data,self.snapshot,self.page,self.future_page,self.footer,self.left_card,self.right_card,self.card_page)
     self:fullRefresh("resume")
 end
 
