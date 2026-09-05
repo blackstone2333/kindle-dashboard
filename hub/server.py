@@ -62,7 +62,9 @@ def _calendar_day(day: dt.date) -> Dict[str, Any]:
     unavailable = {
         "lunar": "暂无",
         "solar_term": "暂无",
+        "solar_term_date": "暂无",
         "next_solar_term": "暂无",
+        "next_solar_term_date": "暂无",
         "almanac": copy.deepcopy(EMPTY_ALMANAC),
     }
     try:
@@ -70,9 +72,17 @@ def _calendar_day(day: dt.date) -> Dict[str, Any]:
 
         lunar = Solar.fromYmd(day.year, day.month, day.day).getLunar()
         previous_jie_qi = lunar.getPrevJieQi()
-        jie_qi = lunar.getJieQi() or (previous_jie_qi.getName() if previous_jie_qi else "暂无")
+        current_jie_qi = lunar.getJieQi()
+        jie_qi_obj = current_jie_qi or previous_jie_qi
+        jie_qi = jie_qi_obj.getName() if jie_qi_obj else "暂无"
         next_jie_qi = lunar.getNextJieQi()
         next_name = next_jie_qi.getName() if next_jie_qi else "暂无"
+        def jie_qi_date(value: Any) -> str:
+            try:
+                solar = value.getSolar()
+                return "%d月%d日" % (solar.getMonth(), solar.getDay())
+            except Exception:
+                return "暂无"
         yi = lunar.getDayYi() or "暂无"
         ji = lunar.getDayJi() or "暂无"
         return {
@@ -80,7 +90,9 @@ def _calendar_day(day: dt.date) -> Dict[str, Any]:
                 lunar.getMonthInChinese(), lunar.getDayInChinese(),
                 lunar.getYearInGanZhi(), lunar.getYearShengXiao(), jie_qi),
             "solar_term": jie_qi,
+            "solar_term_date": jie_qi_date(jie_qi_obj) if jie_qi_obj else "暂无",
             "next_solar_term": next_name or "暂无",
+            "next_solar_term_date": jie_qi_date(next_jie_qi) if next_jie_qi else "暂无",
             "almanac": {"yi": yi, "ji": ji},
         }
     except Exception:

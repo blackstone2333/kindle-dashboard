@@ -86,7 +86,9 @@ class HubTests(unittest.TestCase):
         self.assertTrue(day["lunar"].startswith("农历七月"))
         self.assertIn("丙午马年", day["lunar"])
         self.assertEqual(day["solar_term"], "处暑")
+        self.assertEqual(day["solar_term_date"], "8月23日")
         self.assertEqual(day["next_solar_term"], "白露")
+        self.assertEqual(day["next_solar_term_date"], "9月7日")
 
     def setUp(self):
         self.temp = TemporaryDirectory()

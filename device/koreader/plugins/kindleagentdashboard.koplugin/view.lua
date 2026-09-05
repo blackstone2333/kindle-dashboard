@@ -12,7 +12,7 @@ local Screen = Device.screen
 local View = InputContainer:extend{ name = "KindleAgentDashboardView", covers_fullscreen = true }
 local LEFT_CARD_COUNT = 4 -- today, countdown, weather, Agent
 local RIGHT_CARD_COUNT = 2 -- month, week
-local RIGHT_LOWER_CARD_COUNT = 2 -- schedule, horoscope
+local RIGHT_LOWER_CARD_COUNT = 3 -- schedule, horoscope, almanac
 
 local function str(value, fallback)
     if type(value) == "string" or type(value) == "number" then return tostring(value) end
@@ -290,6 +290,20 @@ function View:paintHoroscopeCard(bb)
     end
 end
 
+function View:paintAlmanacCard(bb)
+    local d = self.data
+    local a = d.almanac or {}
+    self:rect(bb, 792, 590, 612, 420, 255)
+    self:line(bb, 800, 612, 1400, 170, 2)
+    self:text(bb, "节气与黄历", 800, 630, 34, 17, 280)
+    self:text(bb, str(d.solar_term, "暂无") .. "  " .. str(d.solar_term_date, "暂无"), 800, 700, 28, 17, 570)
+    self:text(bb, "下一节气：" .. str(d.next_solar_term, "暂无") .. "  " .. str(d.next_solar_term_date, "暂无"), 800, 745, 23, 51, 570)
+    self:line(bb, 800, 785, 1400, 170)
+    self:text(bb, "宜：" .. short_summary(a.yi), 800, 820, 24, 17, 570)
+    self:text(bb, "忌：" .. short_summary(a.ji), 800, 870, 24, 51, 570)
+    self:text(bb, "点击黄历区域可查看完整信息", 800, 950, 18, 102, 570)
+end
+
 function View:paintWeatherCard(bb)
     local weather = type(self.snapshot.weather) == "table" and self.snapshot.weather or {}
     self:rect(bb, 50, 305, 690, 700, 255)
@@ -320,22 +334,58 @@ function View:paintWeekCard(bb)
     local d = self.data
     self:rect(bb, 792, 36, 612, 465, 255)
     self:icon(bb, "settings", 1328, 48, 38)
-    self:line(bb, 800, 90, 1400, 170, 2)
     local week_label = self.week_offset == 0 and "本周" or (self.week_offset > 0 and ("未来第 " .. tostring(self.week_offset) .. " 周") or ("过去第 " .. tostring(math.abs(self.week_offset)) .. " 周"))
-    self:text(bb, "周历 · " .. week_label, 800, 112, 36, 17, 390)
-    local display = d.future or {}
-    if #display == 0 then
-        self:text(bb, "暂无后续安排", 800, 240, 28, 102, 560)
-        return
+    self:text(bb, "周历 · " .. week_label, 800, 49, 32, 17, 390)
+
+    -- Apple-style seven-column week grid.  The upper card is intentionally
+    -- independent from the lower schedule/almanac card.
+    local offset = tonumber(self.snapshot.utc_offset) or 28800
+    local now = os.time() + offset + (self.week_offset * 7 * 86400)
+    local stamp = os.date("!*t", now)
+    local monday = now - (((stamp.wday + 5) % 7) * 86400)
+    local weekdays = {"一", "二", "三", "四", "五", "六", "日"}
+    local dates = {}
+    local date_to_column = {}
+    local cell_w, grid_x, grid_top, row_h = 85, 800, 182, 22
+    for column = 1, 7 do
+        local day = os.date("!*t", monday + (column - 1) * 86400)
+        local key = string.format("%04d-%02d-%02d", day.year, day.month, day.day)
+        dates[column] = key
+        date_to_column[key] = column
+        self:text(bb, weekdays[column], grid_x + (column - 1) * cell_w + 42, 105, 21, 68, 80, "center")
+        self:text(bb, tostring(day.month) .. "/" .. tostring(day.day), grid_x + (column - 1) * cell_w + 42, 135, 18, day.day == stamp.day and day.month == stamp.month and day.year == stamp.year and 0 or 85, 80, "center")
+        if day.day == stamp.day and day.month == stamp.month and day.year == stamp.year then
+            self:rect(bb, grid_x + (column - 1) * cell_w + 4, 99, 76, 51, 225)
+            self:text(bb, weekdays[column], grid_x + (column - 1) * cell_w + 42, 105, 21, 17, 80, "center")
+            self:text(bb, tostring(day.month) .. "/" .. tostring(day.day), grid_x + (column - 1) * cell_w + 42, 135, 18, 17, 80, "center")
+        end
     end
-    for index = 1, math.min(4, #display) do
-        local item = display[index]
-        local y = 164 + (index - 1) * 70
-        self:text(bb, item.date, 800, y, 20, 68, 120)
-        self:text(bb, item.time, 930, y, 22, 51, 75)
-        self:text(bb, item.title, 1015, y - 2, 27, 17, 320)
-        self:text(bb, item.kind, 1400, y + 31, 19, 102, 100, "right")
-        self:line(bb, 800, y + 58, 1400, 170)
+    self:line(bb, 800, 157, 1400, 102, 2)
+    self:text(bb, "全天", 768, 163, 16, 102, 30, "right")
+    for row = 0, 12 do
+        local y = grid_top + row * row_h
+        self:line(bb, 800, y, 1400, 225)
+        if row < 12 then self:text(bb, string.format("%02d", row + 8), 768, y + 3, 14, 102, 30, "right") end
+    end
+    for column = 0, 7 do self:rect(bb, grid_x + column * cell_w, 157, 1, 300, 225) end
+
+    for _, item in ipairs(d.future or {}) do
+        local column = date_to_column[item.target_date]
+        if column then
+            local x = grid_x + (column - 1) * cell_w + 3
+            if item.time == "全天" or item.time == "未定时" then
+                self:rect(bb, x, 161, 79, 22, 220)
+                self:text(bb, item.title, x + 3, 163, 13, 17, 72)
+            else
+                local hour, minute = tostring(item.time):match("^(%d%d?):(%d%d)")
+                hour, minute = tonumber(hour), tonumber(minute) or 0
+                if hour and hour >= 8 and hour <= 19 then
+                    local y = grid_top + (hour - 8) * row_h + math.floor(minute / 60 * row_h)
+                    self:rect(bb, x, y, 79, 34, 225)
+                    self:text(bb, item.title, x + 3, y + 2, 13, 17, 73)
+                end
+            end
+        end
     end
 end
 
@@ -462,7 +512,7 @@ function View:paintDashboard(bb)
         end
     end
     self:line(bb, 800, 503, 1400, 68, 2)
-    self:text(bb, "节气：" .. str(d.solar_term, "暂无") .. "   下一节气：" .. str(d.next_solar_term, "暂无"), 800, 528, 24, 51, 600)
+    self:text(bb, "节气：" .. str(d.solar_term, "暂无") .. "（" .. str(d.solar_term_date, "暂无") .. "）  下一节气：" .. str(d.next_solar_term, "暂无") .. "（" .. str(d.next_solar_term_date, "暂无") .. "）", 800, 528, 20, 51, 600)
     local almanac = d.almanac or {}
     self:text(bb, "黄历：宜 " .. short_summary(almanac.yi) .. "   忌 " .. short_summary(almanac.ji), 800, 563, 23, 102, 600)
     self:line(bb, 800, 594, 1400, 170)
@@ -503,6 +553,8 @@ function View:paintDashboard(bb)
     end
     if self.right_lower_card == 2 then
         self:paintHoroscopeCard(bb)
+    elseif self.right_lower_card == 3 then
+        self:paintAlmanacCard(bb)
     end
     self.render_count = self.render_count + 1
     self:writeStatus()
@@ -632,7 +684,7 @@ function View:tap(ges)
             end
         end
     end
-    if x >= 800 and y >= 508 and y < 595 then
+    if x >= 800 and y >= 508 and y < 595 or (self.right_lower_card == 3 and x >= 800 and y >= 600 and y < 1008) then
         local a = self.data.almanac or {}
         UIManager:show(require("ui/widget/infomessage"):new{
             text = "黄历（传统民俗参考）\n\n宜：" .. summary(a.yi) .. "\n\n忌：" .. summary(a.ji),

@@ -63,7 +63,7 @@ function Updates.capture(data,snapshot,page,future_page,footer,left_card,right_c
             empty_ok=#data.timeline==0 and calendar_ok or false},
         countdown={slot=left_card or 1,card_page=card_page or 0,value=countdown,cards=data.cards},
         calendar={slot=right_card or 1,data.month_label,data.month_cells,selected_date=data.selected_date},
-        almanac={data.solar_term,data.next_solar_term,firstTwo(almanac.yi),firstTwo(almanac.ji)},
+        almanac={data.solar_term,data.solar_term_date,data.next_solar_term,data.next_solar_term_date,firstTwo(almanac.yi),firstTwo(almanac.ji)},
         future={slot=right_lower_card or 1,upper_slot=right_card or 1,card_page=card_page or 0,selected_date=data.selected_date,selected_label=data.selected_label,
             rows=rows(display,future_page,5),page=future_page,pages=math.max(1,math.ceil(#display/5))},
         footer={wifi=footer.wifi,battery=rounded(footer.battery),battery_icon=footer.battery_icon},

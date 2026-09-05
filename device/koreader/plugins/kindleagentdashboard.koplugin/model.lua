@@ -667,7 +667,9 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
         calendar_month = display_month,
         lunar = day_meta_lunar,
         solar_term = (type(day_meta) == "table" and day_meta.solar_term) or "暂无",
+        solar_term_date = (type(day_meta) == "table" and day_meta.solar_term_date) or "暂无",
         next_solar_term = (type(day_meta) == "table" and day_meta.next_solar_term) or "暂无",
+        next_solar_term_date = (type(day_meta) == "table" and day_meta.next_solar_term_date) or "暂无",
         almanac = {
             yi = (day_meta_almanac and day_meta_almanac.yi) or "暂无",
             ji = (day_meta_almanac and day_meta_almanac.ji) or "暂无",
