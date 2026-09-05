@@ -365,7 +365,7 @@ function View:paintWeekCard(bb)
     for row = 0, 12 do
         local y = grid_top + row * row_h
         self:line(bb, 800, y, 1400, 225)
-        if row < 12 then self:text(bb, string.format("%02d", row + 8), 768, y + 3, 14, 102, 30, "right") end
+        if row <= 12 then self:text(bb, string.format("%02d", row + 8), 768, y + 3, 14, 102, 30, "right") end
     end
     for column = 0, 7 do self:rect(bb, grid_x + column * cell_w, 157, 1, 300, 225) end
 
@@ -379,7 +379,7 @@ function View:paintWeekCard(bb)
             else
                 local hour, minute = tostring(item.time):match("^(%d%d?):(%d%d)")
                 hour, minute = tonumber(hour), tonumber(minute) or 0
-                if hour and hour >= 8 and hour <= 19 then
+                if hour and hour >= 8 and hour <= 20 then
                     local y = grid_top + (hour - 8) * row_h + math.floor(minute / 60 * row_h)
                     self:rect(bb, x, y, 79, 34, 225)
                     self:text(bb, item.title, x + 3, y + 2, 13, 17, 73)
