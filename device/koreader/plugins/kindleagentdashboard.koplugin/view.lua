@@ -512,7 +512,7 @@ function View:paintDashboard(bb)
         end
     end
     self:line(bb, 800, 503, 1400, 68, 2)
-    self:text(bb, "节气：" .. str(d.solar_term, "暂无") .. "（" .. str(d.solar_term_date, "暂无") .. "）  下一节气：" .. str(d.next_solar_term, "暂无") .. "（" .. str(d.next_solar_term_date, "暂无") .. "）", 800, 528, 20, 51, 600)
+    self:text(bb, "节气：" .. str(d.solar_term, "暂无") .. " " .. str(d.solar_term_date, "暂无") .. " · 下节气：" .. str(d.next_solar_term, "暂无") .. " " .. str(d.next_solar_term_date, "暂无"), 800, 528, 20, 51, 600)
     local almanac = d.almanac or {}
     self:text(bb, "黄历：宜 " .. short_summary(almanac.yi) .. "   忌 " .. short_summary(almanac.ji), 800, 563, 23, 102, 600)
     self:line(bb, 800, 594, 1400, 170)
