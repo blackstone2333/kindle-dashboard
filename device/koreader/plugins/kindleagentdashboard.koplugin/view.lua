@@ -406,7 +406,16 @@ function View:calendarActions(date, same_selected)
             break
         end
     end
-    dialog = require("ui/widget/buttondialog"):new{title=date .. " · 月历操作", buttons=buttons}
+    -- The dialog is opened from the calendar tap handler.  If it remains
+    -- dismissable, KOReader can deliver that same tap to the dialog's
+    -- full-screen TapClose range and immediately close it again.  Keep an
+    -- explicit 取消 button instead, so the first tap reliably leaves the
+    -- action menu visible.
+    dialog = require("ui/widget/buttondialog"):new{
+        title=date .. " · 月历操作",
+        buttons=buttons,
+        dismissable=false,
+    }
     UIManager:show(dialog)
 end
 
@@ -440,7 +449,8 @@ function View:tap(ges)
         return true
     end
     if x >= 800 and y >= 670 and y < 1008 then
-        local item = self.data.future[self.future_page*5 + math.floor((y-670)/67) + 1]
+        local display = self:displayItems()
+        local item = display[self.future_page*5 + math.floor((y-670)/67) + 1]
         if item then UIManager:show(require("ui/widget/infomessage"):new{
             text=item.date .. "  " .. item.time .. "\n\n" .. item.title .. "\n\n" .. item.kind .. " · " .. meta(item),
         }) end
