@@ -62,7 +62,7 @@ function View:init()
     self.left_card, self.right_card, self.right_lower_card, self.card_page = 1, 1, 1, 0
     self.countdown_path = self.root .. "/countdown.json"
     self.countdown_config = self.cache.read(self.countdown_path) or {version=1,primary_id="primary",targets={}}
-    self.month_offset, self.refresh_batches, self.full_refreshes = 0, 0, 1
+    self.month_offset, self.week_offset, self.refresh_batches, self.full_refreshes = 0, 0, 0, 1
     self.last_request, self.last_device_poll = 0, os.time()
     self.last_refresh = {at=os.time(),mode="full",regions={"initial"}}
     self.icons = {}
@@ -87,7 +87,7 @@ function View:init()
 end
 
 function View:rebuild()
-    self.data = self.model.build(self.snapshot, os.time(), self.month_offset, self.selected_date, self.countdown_config)
+    self.data = self.model.build(self.snapshot, os.time(), self.month_offset, self.selected_date, self.countdown_config, self.week_offset)
     self.page = math.min(self.page or 0, math.max(0, math.ceil(#self.data.timeline / 6) - 1))
     local display_count = self.selected_date and #self.data.selected or #self.data.future
     self.future_page = math.min(self.future_page or 0, math.max(0, math.ceil(display_count / 5) - 1))
@@ -321,7 +321,8 @@ function View:paintWeekCard(bb)
     self:rect(bb, 792, 36, 612, 465, 255)
     self:icon(bb, "settings", 1328, 48, 38)
     self:line(bb, 800, 90, 1400, 170, 2)
-    self:text(bb, "周历 · 未来 7 天", 800, 112, 36, 17, 390)
+    local week_label = self.week_offset == 0 and "本周" or (self.week_offset > 0 and ("未来第 " .. tostring(self.week_offset) .. " 周") or ("过去第 " .. tostring(math.abs(self.week_offset)) .. " 周"))
+    self:text(bb, "周历 · " .. week_label, 800, 112, 36, 17, 390)
     local display = d.future or {}
     if #display == 0 then
         self:text(bb, "暂无后续安排", 800, 240, 28, 102, 560)
@@ -517,7 +518,7 @@ function View:writeStatus()
         active = true, rendered_at = os.time(), clock = d.clock, date = d.date,
         renders = self.render_count, events = #(s.events or {}), tasks = #(s.tasks or {}),
         timeline = #d.timeline, future = #d.future, page = self.page, future_page=self.future_page,
-        month_offset=self.month_offset,month_label=d.month_label,last_refresh=self.last_refresh,
+        month_offset=self.month_offset,week_offset=self.week_offset,month_label=d.month_label,last_refresh=self.last_refresh,
         refresh_batches=self.refresh_batches,full_refreshes=self.full_refreshes,
         width = self.dimen.w, height = self.dimen.h, battery = self.footer.battery,
         wifi = self.footer.wifi, sync_error = self.client.error or "",
@@ -657,7 +658,7 @@ function View:tap(ges)
 end
 
 function View:setMonth(offset)
-    local candidate = self.model.build(self.snapshot,os.time(),offset,self.selected_date,self.countdown_config)
+    local candidate = self.model.build(self.snapshot,os.time(),offset,self.selected_date,self.countdown_config,self.week_offset)
     local key = string.format("%04d-%02d-01",candidate.calendar_year,candidate.calendar_month)
     local first,last = self.snapshot.range_start,self.snapshot.range_end
     if type(first)=="string" and type(last)=="string" and (key<first or key>=last) then
@@ -686,13 +687,16 @@ function View:swipe(ges)
         self.right_card = (self.right_card + delta - 1) % RIGHT_CARD_COUNT + 1
         self.card_page = 0
         self.future_page = 0
+        if self.right_card == 2 then self.week_offset = 0 end
         self:requestUpdates()
         return true
     elseif x>=760 and y>=145 and y<505 then
         if self.right_card == 1 then
             self:setMonth(self.month_offset+delta)
         else
-            self.future_page = (self.future_page + delta) % math.max(1, math.ceil(#self.data.future/4))
+            self.week_offset = self.week_offset + delta
+            self.future_page = 0
+            self:rebuild()
             self:requestUpdates()
         end
         return true

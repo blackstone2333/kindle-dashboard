@@ -421,7 +421,7 @@ local function agent_cards(snapshot, now_epoch)
     return result
 end
 
-function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_config)
+function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_config, week_offset)
     local source = (type(snapshot) == "table") and snapshot or {}
     local offset = as_number(source.utc_offset) or DEFAULT_OFFSET
     local epoch_now = as_number(now_epoch) or os.time()
@@ -483,13 +483,14 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
 
     local future = {}
     local future_seen = {}
-    local future_limit = now_day + 6
+    local future_start = now_day + (math.floor(as_number(week_offset) or 0) * 7)
+    local future_limit = future_start + 6
 
     for _, event in ipairs(normalized_events) do
         local start_day = local_day_number(event.start, offset)
         local end_day = local_day_number(event.stop - 1, offset)
         local event_day = nil
-        for day = now_day, future_limit do
+        for day = future_start, future_limit do
             if day >= start_day and day <= end_day then
                 event_day = day
                 break
@@ -519,7 +520,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
     for _, task in ipairs(normalized_tasks) do
         if task.due then
             local due_day = local_day_number(task.due, offset)
-            if due_day and due_day >= now_day and due_day <= future_limit then
+            if due_day and due_day >= future_start and due_day <= future_limit then
                 local id = "task:" .. task.id
                 local due_time = task.has_time and format_clock(task.due, offset) or "未定时"
                 local _, ev_month, ev_day = date_from_day(due_day)
@@ -538,7 +539,7 @@ function M.build(snapshot, now_epoch, month_offset, selected_date, countdown_con
             end
         elseif task.due_date then
             local due_day = parse_ymd(task.due_date)
-            if due_day and due_day >= now_day and due_day <= future_limit then
+            if due_day and due_day >= future_start and due_day <= future_limit then
                 local id = "task:" .. task.id
                 local _, ev_month, ev_day = date_from_day(due_day)
                 table.insert(future, {
